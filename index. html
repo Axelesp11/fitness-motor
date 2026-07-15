@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Motor de Cálculo Fitness</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #14171C; color: #ECEDEF; padding: 20px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .subtitle { color: #8B92A0; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
+    .card { background: #1B1F26; border: 1px solid #2A2F38; border-radius: 12px; padding: 16px; }
+    .card-title { font-size: 12px; color: #8B92A0; font-weight: 600; margin-bottom: 12px; font-family: monospace; }
+    .form-group { margin-bottom: 16px; }
+    label { font-size: 12px; color: #8B92A0; display: block; margin-bottom: 6px; font-family: monospace; }
+    input, select { width: 100%; background: #20242C; border: 1px solid #2A2F38; border-radius: 8px; padding: 10px 12px; color: #ECEDEF; font-size: 14px; outline: none; }
+    .results { display: flex; flex-direction: column; gap: 16px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .stat-value { font-size: 22px; font-weight: 700; }
+    .stat-value.accent { color: #FF6B35; }
+    .sesion { display: flex; gap: 8px; background: #20242C; border-radius: 8px; padding: 8px 12px; margin-bottom: 6px; font-size: 12px; }
+    .sesion-dia { font-family: monospace; color: #FF6B35; font-weight: 600; min-width: 110px; }
+    @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } .stats-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Motor de Cálculo Fitness</h1>
+    <p class="subtitle">Respaldado por ISSN 2017 y Schoenfeld et al.</p>
+
+    <div class="grid">
+      <!-- FORMULARIO -->
+      <div class="card" style="height: fit-content;">
+        <div class="card-title">DATOS</div>
+        <div class="form-group">
+          <label>PESO (KG)</label>
+          <input type="number" id="peso" value="75" min="30">
+        </div>
+        <div class="form-group">
+          <label>ESTATURA (CM)</label>
+          <input type="number" id="estatura" value="172" min="140">
+        </div>
+        <div class="form-group">
+          <label>EDAD</label>
+          <input type="number" id="edad" value="24" min="15">
+        </div>
+        <div class="form-group">
+          <label>SEXO</label>
+          <select id="sexo"><option value="hombre">Hombre</option><option value="mujer">Mujer</option></select>
+        </div>
+        <div class="form-group">
+          <label>EXPERIENCIA</label>
+          <select id="experiencia"><option value="nunca">Nunca</option><option value="basico">Menos de 6m</option><option value="intermedio">Más de 6m</option></select>
+        </div>
+        <div class="form-group">
+          <label>OBJETIVO</label>
+          <select id="objetivo"><option value="hipertrofia">Hipertrofia</option><option value="fuerza">Fuerza</option><option value="perdida">Pérdida de grasa</option></select>
+        </div>
+        <div class="form-group">
+          <label>DÍAS/SEMANA</label>
+          <select id="dias"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select>
+        </div>
+        <div class="form-group">
+          <label>ACTIVIDAD</label>
+          <select id="actividad"><option value="sedentario" selected>Sedentario</option><option value="ligero">Ligero</option><option value="activo">Activo</option></select>
+        </div>
+      </div>
+
+      <!-- RESULTADOS -->
+      <div class="results">
+        <div class="card">
+          <div class="card-title">METABOLISMO</div>
+          <div class="stats-grid">
+            <div><div style="font-size: 11px; color: #8B92A0; margin-bottom: 4px;">BMR</div><div class="stat-value" id="bmr">0</div><div style="font-size: 11px; color: #8B92A0;">kcal/día</div></div>
+            <div><div style="font-size: 11px; color: #8B92A0; margin-bottom: 4px;">TDEE</div><div class="stat-value" id="tdee">0</div><div style="font-size: 11px; color: #8B92A0;">kcal/día</div></div>
+            <div><div style="font-size: 11px; color: #8B92A0; margin-bottom: 4px;">META</div><div class="stat-value accent" id="meta">0</div><div style="font-size: 11px; color: #8B92A0;">kcal/día</div></div>
+          </div>
+          <div style="border-top: 1px solid #2A2F38; padding-top: 12px; margin-top: 12px;">
+            <div class="stats-grid">
+              <div><div style="font-size: 11px; color: #8B92A0; margin-bottom: 4px;">PROTEÍNA</div><div class="stat-value" id="proteina">0</div><div style="font-size: 11px; color: #8B92A0;">g/día</div></div>
+              <div><div style="font-size: 11px; color: #8B92A0; margin-bottom: 4px;">GRASAS</div><div class="stat-value" id="grasas">0</div><div style="font-size: 11px; color: #8B92A0;">g/día</div></div>
+              <div><div style="font-size: 11px; color: #8B92A0; margin-bottom: 4px;">CARBOS</div><div class="stat-value" id="carbos">0</div><div style="font-size: 11px; color: #8B92A0;">g/día</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">SPLIT</div>
+          <p style="font-size: 18px; font-weight: 700; color: #FF6B35; margin: 0 0 12px 0;" id="split-nombre">Fullbody</p>
+          <div id="sesiones"></div>
+          <div style="margin-top: 12px; padding: 8px 12px; background: #20242C; border-radius: 8px; font-size: 11px; font-family: monospace; color: #8B92A0;" id="params"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const inputs = document.querySelectorAll('input, select');
+    inputs.forEach(i => i.addEventListener('change', calcular));
+    inputs.forEach(i => i.addEventListener('input', calcular));
+
+    function calcBMR(peso, estatura, edad, sexo) {
+      const base = 10 * peso + 6.25 * estatura - 5 * edad;
+      return sexo === "hombre" ? base + 5 : base - 161;
+    }
+
+    function calcTDEE(bmr, dias, actividad) {
+      const act = { sedentario: 1.2, ligero: 1.375, activo: 1.55 };
+      const entreno = { 2: 0.1, 3: 0.15, 4: 0.2, 5: 0.25, 6: 0.3 };
+      return Math.round(bmr * ((act[actividad] || 1.2) + (entreno[dias] || 0.15)));
+    }
+
+    function calcMacros(cal, peso, objetivo) {
+      const gProt = objetivo === "perdida" ? 2.4 : objetivo === "fuerza" ? 1.8 : 2.0;
+      const prot = Math.round(peso * gProt);
+      const gras = Math.round(peso * 0.8);
+      const carb = Math.round((cal - prot * 4 - gras * 9) / 4);
+      return { prot, gras, carb };
+    }
+
+    function calcular() {
+      const peso = Number(document.getElementById('peso').value);
+      const estatura = Number(document.getElementById('estatura').value);
+      const edad = Number(document.getElementById('edad').value);
+      const sexo = document.getElementById('sexo').value;
+      const experiencia = document.getElementById('experiencia').value;
+      const objetivo = document.getElementById('objetivo').value;
+      const dias = Number(document.getElementById('dias').value);
+      const actividad = document.getElementById('actividad').value;
+
+      const bmr = Math.round(calcBMR(peso, estatura, edad, sexo));
+      const tdee = calcTDEE(bmr, dias, actividad);
+      const meta = objetivo === "perdida" ? Math.round(tdee * 0.82) : objetivo === "hipertrofia" ? Math.round(tdee * 1.08) : tdee;
+      const macros = calcMacros(meta, peso, objetivo);
+
+      document.getElementById('bmr').textContent = bmr;
+      document.getElementById('tdee').textContent = tdee;
+      document.getElementById('meta').textContent = meta;
+      document.getElementById('proteina').textContent = macros.prot;
+      document.getElementById('grasas').textContent = macros.gras;
+      document.getElementById('carbos').textContent = macros.carb;
+
+      const tope = { nunca: 4, basico: 5, intermedio: 6 }[experiencia] || 6;
+      const d = Math.min(dias, tope);
+      const grupos = ["Pecho", "Espalda", "Piernas", "Hombro", "Brazos", "Core"];
+
+      let nombre = "Fullbody";
+      if (d === 4) nombre = "Upper/Lower";
+      if (d === 5) nombre = "PPL + Upper/Lower";
+      if (d === 6) nombre = "Push/Pull/Legs (x2)";
+
+      document.getElementById('split-nombre').textContent = nombre;
+
+      let html = "";
+      for (let i = 0; i < d; i++) {
+        html += `<div class="sesion"><span class="sesion-dia">Día ${i + 1}</span><span>${grupos.join(" • ")}</span></div>`;
+      }
+      document.getElementById('sesiones').innerHTML = html;
+
+      const p = { hipertrofia: "3-4 series | 8-12 reps | 2-3 min", fuerza: "4-5 series | 3-6 reps | 3-5 min", perdida: "3 series | 12-15 reps | 45-90s" };
+      document.getElementById('params').textContent = p[objetivo];
+    }
+
+    calcular();
+  </script>
+</body>
+</html>
