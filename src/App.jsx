@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { AlertTriangle } from "lucide-react";
 
 const C = {
   bg: "#14171C",
