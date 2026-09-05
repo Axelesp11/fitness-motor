@@ -1,22 +1,25 @@
 {
   "name": "fitness-motor",
-  "version": "0.1.0",
+  "version": "3.0.0",
   "private": true,
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "lucide-react": "^0.263.1"
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build"
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build",
+    "test": "vitest run",
+    "check": "npm run test && npm run build"
   },
-  "eslintConfig": {
-    "extends": ["react-app"]
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
-  "browserslist": {
-    "production": [">0.2%", "not dead"],
-    "development": ["last 1 chrome version"]
+  "devDependencies": {
+    "@vitejs/plugin-react": "6.1.1",
+    "vite": "8.2.2",
+    "vitest": "5.0.0"
   }
 }
