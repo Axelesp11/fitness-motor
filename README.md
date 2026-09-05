@@ -1,29 +1,56 @@
-# fitness-motor
+# Motor Fitness 3.0
 
-Motor Fitness 2.0: generador adaptativo de entrenamiento y nutrición orientativa.
+Motor local-first de entrenamiento y nutrición orientativa para adultos sanos.
 
-## Qué automatiza
+## Qué hace
 
-- BMR, TDEE, calorías objetivo y macros.
-- Selección de split según días y experiencia.
-- Rutina por ejercicios según objetivo, equipo y duración.
-- Series, repeticiones, descanso y RIR.
-- Check-in de recuperación que reduce volumen cuando detecta fatiga.
-- Registro local de carga, repeticiones y RIR.
-- Progresión automática de carga mediante doble progresión simplificada.
-- Historial reciente persistido en `localStorage`.
+- Calcula BMR, gasto energético inicial, calorías objetivo y macros.
+- Separa actividad diaria del coste estimado del entrenamiento.
+- Con suficientes check-ins de peso + calorías, pasa gradualmente a un gasto **adaptativo**.
+- Genera Full Body, Upper/Lower o PPL según frecuencia.
+- Ajusta ejercicios por equipo, tiempo, objetivo y grupo prioritario.
+- Trabaja con series reales: carga, repeticiones y RIR por set.
+- Usa doble progresión por mayoría de series para subir, mantener o bajar carga.
+- Estima e1RM y detecta récords de fuerza/volumen.
+- Sugiere calentamientos para movimientos con carga externa.
+- Incluye temporizador de descanso.
+- Ajusta volumen por recuperación diaria.
+- Lleva un mesociclo automático de seis semanas con descarga.
+- Calcula volumen semanal equivalente por grupo muscular.
+- Guarda todo en el navegador y permite exportar/importar un respaldo JSON.
+
+## Arquitectura
+
+- React 19
+- Vite 8
+- Vitest 5
+- Sin backend ni cuentas en esta etapa.
+- Estado persistente versionado en `localStorage` (`fitness-motor-v3`).
 
 ## Desarrollo
 
+Requiere Node.js 22.12+.
+
 ```bash
 npm install
-npm start
+npm run dev
 ```
 
-## Producción
+## Calidad
 
 ```bash
+npm test
 npm run build
+npm run check
 ```
 
-> Las recomendaciones son orientativas y no sustituyen valoración médica, nutricional o de rehabilitación.
+CI ejecuta pruebas unitarias, build de producción y auditoría de dependencias runtime en cada PR a `main`.
+
+## Evidencia y benchmark
+
+- [`docs/EVIDENCE.md`](docs/EVIDENCE.md)
+- [`docs/BENCHMARK.md`](docs/BENCHMARK.md)
+
+## Alcance y seguridad
+
+Las calorías, el gasto y el e1RM son estimaciones. El motor no sustituye valoración médica, nutricional ni de rehabilitación. Está calibrado para adultos sanos; dolor agudo, lesión, mareo, dolor torácico o síntomas inusuales deben prevalecer sobre cualquier recomendación automática.
