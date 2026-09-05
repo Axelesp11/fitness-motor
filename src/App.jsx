@@ -1,201 +1,372 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import "./App.css";
+import {
+  EXPERIENCE_LABELS,
+  GOAL_LABELS,
+  buildPlan,
+  calcNutrition,
+  formatRest,
+  nextLoadAdvice,
+} from "./engine";
 
-const C = {
-  bg: "#14171C",
-  surface: "#1B1F26",
-  surface2: "#20242C",
-  border: "#2A2F38",
-  text: "#ECEDEF",
-  muted: "#8B92A0",
-  effort: "#FF6B35",
-  effortDim: "#4A3226",
-  recovery: "#4FD1C5",
-  recoveryDim: "#1F3A38",
+const DEFAULT_PROFILE = {
+  peso: 75,
+  estatura: 172,
+  edad: 24,
+  sexo: "hombre",
+  experiencia: "nunca",
+  objetivo: "hipertrofia",
+  dias: 3,
+  actividad: "sedentario",
+  equipo: "gym",
+  duracion: 60,
 };
 
-function calcBMR({ peso, estatura, edad, sexo }) {
-  const base = 10 * peso + 6.25 * estatura - 5 * edad;
-  return sexo === "hombre" ? base + 5 : base - 161;
-}
+const DEFAULT_READINESS = { energia: 4, sueno: 4, dolor: 2 };
 
-const ACTIVIDAD_BASE = { sedentario: 1.2, ligero: 1.375, activo: 1.55 };
-const ENTRENO_ADD = { 2: 0.1, 3: 0.15, 4: 0.2, 5: 0.25, 6: 0.3 };
-
-function calcTDEE(bmr, dias, nivelActividad) {
-  const mult = (ACTIVIDAD_BASE[nivelActividad] || 1.2) + (ENTRENO_ADD[dias] || 0.15);
-  return Math.round(bmr * mult);
-}
-
-function calcCaloriasObjetivo(tdee, objetivo) {
-  if (objetivo === "perdida") return Math.round(tdee * 0.82);
-  if (objetivo === "hipertrofia") return Math.round(tdee * 1.08);
-  return tdee;
-}
-
-function calcMacros(calorias, peso, objetivo) {
-  const gProteinaPorKg = objetivo === "perdida" ? 2.4 : objetivo === "fuerza" ? 1.8 : 2.0;
-  const proteina = Math.round(peso * gProteinaPorKg);
-  const grasa = Math.round(peso * 0.8);
-  const carbos = Math.round((calorias - proteina * 4 - grasa * 9) / 4);
-  return { proteina, grasa, carbos };
-}
-
-const PARAM_OBJETIVO = {
-  hipertrofia: { series: "3-4", reps: "8-12", descanso: "2-3 min" },
-  fuerza: { series: "4-5", reps: "3-6", descanso: "3-5 min" },
-  perdida: { series: "3", reps: "12-15", descanso: "45-90s" },
-};
-
-const GRUPOS = ["Pecho", "Espalda", "Piernas", "Hombro", "Brazos", "Core"];
-
-function definirSplit(dias, exp) {
-  const tope = { nunca: 4, basico: 5, intermedio: 6 }[exp] || 6;
-  const d = Math.min(dias, tope);
-
-  if (exp === "nunca" || d <= 3) {
-    return { nombre: "Fullbody", sesiones: Array.from({ length: d }, (_, i) => ({ dia: `Día ${i + 1}`, grupos: GRUPOS })) };
+function loadJSON(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
   }
-  if (d === 4) {
-    return { nombre: "Upper/Lower", sesiones: [
-      { dia: "Día 1", grupos: ["Pecho", "Espalda", "Hombro", "Brazos"] },
-      { dia: "Día 2", grupos: ["Piernas", "Core"] },
-      { dia: "Día 3", grupos: ["Pecho", "Espalda", "Hombro", "Brazos"] },
-      { dia: "Día 4", grupos: ["Piernas", "Core"] },
-    ]};
-  }
-  if (d === 5) {
-    return { nombre: "PPL + Upper/Lower", sesiones: [
-      { dia: "Día 1 (Push)", grupos: ["Pecho", "Hombro", "Brazos"] },
-      { dia: "Día 2 (Pull)", grupos: ["Espalda", "Brazos"] },
-      { dia: "Día 3 (Legs)", grupos: ["Piernas", "Core"] },
-      { dia: "Día 4 (Upper)", grupos: ["Pecho", "Espalda", "Hombro", "Brazos"] },
-      { dia: "Día 5 (Lower)", grupos: ["Piernas", "Core"] },
-    ]};
-  }
-  return { nombre: "Push/Pull/Legs (x2)", sesiones: [
-    { dia: "Día 1 (Push)", grupos: ["Pecho", "Hombro", "Brazos"] },
-    { dia: "Día 2 (Pull)", grupos: ["Espalda", "Brazos"] },
-    { dia: "Día 3 (Legs)", grupos: ["Piernas", "Core"] },
-    { dia: "Día 4 (Push)", grupos: ["Pecho", "Hombro", "Brazos"] },
-    { dia: "Día 5 (Pull)", grupos: ["Espalda", "Brazos"] },
-    { dia: "Día 6 (Legs)", grupos: ["Piernas", "Core"] },
-  ].slice(0, d)};
+}
+
+function Field({ label, children }) {
+  return (
+    <div className="field">
+      <label>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Metric({ label, value, unit, accent = false }) {
+  return (
+    <div className={`metric ${accent ? "metric-accent" : ""}`}>
+      <div className="metric-label">{label}</div>
+      <div className="metric-value">{value}</div>
+      <div className="metric-unit">{unit}</div>
+    </div>
+  );
 }
 
 export default function App() {
-  const [form, setForm] = useState({
-    peso: 75, estatura: 172, edad: 24, sexo: "hombre",
-    experiencia: "nunca", objetivo: "hipertrofia", dias: 3, actividad: "sedentario",
-  });
+  const [profile, setProfile] = useState(() => loadJSON("fitness-motor-profile", DEFAULT_PROFILE));
+  const [readiness, setReadiness] = useState(() => loadJSON("fitness-motor-readiness", DEFAULT_READINESS));
+  const [logs, setLogs] = useState(() => loadJSON("fitness-motor-logs", []));
+  const [activeDay, setActiveDay] = useState(0);
+  const [drafts, setDrafts] = useState({});
 
-  const set = (k) => (e) => setForm(f => ({ ...f, [k]: ["peso", "estatura", "edad", "dias"].includes(k) ? Number(e.target.value) : e.target.value }));
+  useEffect(() => {
+    window.localStorage.setItem("fitness-motor-profile", JSON.stringify(profile));
+  }, [profile]);
 
-  const resultado = useMemo(() => {
-    const bmr = calcBMR(form);
-    const tdee = calcTDEE(bmr, form.dias, form.actividad);
-    const calorias = calcCaloriasObjetivo(tdee, form.objetivo);
-    const macros = calcMacros(calorias, form.peso, form.objetivo);
-    const split = definirSplit(form.dias, form.experiencia);
-    const params = PARAM_OBJETIVO[form.objetivo];
-    return { bmr: Math.round(bmr), tdee, calorias, macros, split, params };
-  }, [form]);
+  useEffect(() => {
+    window.localStorage.setItem("fitness-motor-readiness", JSON.stringify(readiness));
+  }, [readiness]);
+
+  useEffect(() => {
+    window.localStorage.setItem("fitness-motor-logs", JSON.stringify(logs));
+  }, [logs]);
+
+  const nutrition = useMemo(() => calcNutrition(profile), [profile]);
+  const plan = useMemo(() => buildPlan(profile, readiness), [profile, readiness]);
+
+  useEffect(() => {
+    if (activeDay >= plan.sessions.length) setActiveDay(0);
+  }, [activeDay, plan.sessions.length]);
+
+  const session = plan.sessions[activeDay] || plan.sessions[0];
+
+  const lastByExercise = useMemo(() => {
+    const map = {};
+    logs.forEach((log) => {
+      map[log.exerciseId] = log;
+    });
+    return map;
+  }, [logs]);
+
+  const updateProfile = (key) => (event) => {
+    const numeric = ["peso", "estatura", "edad", "dias", "duracion"].includes(key);
+    setProfile((prev) => ({
+      ...prev,
+      [key]: numeric ? Number(event.target.value) : event.target.value,
+    }));
+  };
+
+  const updateReadiness = (key) => (event) => {
+    setReadiness((prev) => ({ ...prev, [key]: Number(event.target.value) }));
+  };
+
+  const updateDraft = (exerciseId, key, value) => {
+    setDrafts((prev) => ({
+      ...prev,
+      [exerciseId]: { ...prev[exerciseId], [key]: value },
+    }));
+  };
+
+  const saveExercise = (exercise) => {
+    const draft = drafts[exercise.id] || {};
+    const weight = Number(draft.weight);
+    const reps = Number(draft.reps);
+    const rir = Number(draft.rir);
+
+    if (!Number.isFinite(weight) || weight < 0 || !Number.isFinite(reps) || reps <= 0 || !Number.isFinite(rir) || rir < 0) {
+      return;
+    }
+
+    const entry = {
+      id: `${Date.now()}-${exercise.id}`,
+      createdAt: new Date().toISOString(),
+      session: session.label,
+      exerciseId: exercise.id,
+      exerciseName: exercise.name,
+      weight,
+      reps,
+      rir,
+    };
+
+    setLogs((prev) => [...prev, entry].slice(-250));
+    setDrafts((prev) => ({ ...prev, [exercise.id]: {} }));
+  };
 
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", color: C.text, fontFamily: "system-ui", padding: "20px" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Motor de Cálculo Fitness</h1>
-        <p style={{ color: C.muted, marginBottom: 24 }}>Respaldado por ISSN 2017 y Schoenfeld et al.</p>
-
-        <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 20 }}>
-          {/* FORM */}
-          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, height: "fit-content" }}>
-            <div style={{ fontFamily: "monospace", fontSize: 12, color: C.muted, marginBottom: 12, fontWeight: 600 }}>DATOS</div>
-            {[
-              ["PESO (KG)", "peso", "number"],
-              ["ESTATURA (CM)", "estatura", "number"],
-              ["EDAD", "edad", "number"],
-            ].map(([label, key, type]) => (
-              <div key={key} style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: C.muted, display: "block", marginBottom: 6, fontFamily: "monospace" }}>{label}</label>
-                <input type={type} value={form[key]} onChange={set(key)} style={{ width: "100%", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", color: C.text, outline: "none" }} />
-              </div>
-            ))}
-            {[
-              ["SEXO", "sexo", ["hombre", "mujer"]],
-              ["EXPERIENCIA", "experiencia", ["nunca", "basico", "intermedio"]],
-              ["OBJETIVO", "objetivo", ["hipertrofia", "fuerza", "perdida"]],
-              ["DÍAS/SEMANA", "dias", ["2", "3", "4", "5", "6"]],
-              ["ACTIVIDAD", "actividad", ["sedentario", "ligero", "activo"]],
-            ].map(([label, key, options]) => (
-              <div key={key} style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: C.muted, display: "block", marginBottom: 6, fontFamily: "monospace" }}>{label}</label>
-                <select value={form[key]} onChange={set(key)} style={{ width: "100%", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", color: C.text, outline: "none" }}>
-                  {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-              </div>
-            ))}
+    <main className="app-shell">
+      <div className="container">
+        <header className="header">
+          <div>
+            <p className="eyebrow">MOTOR FITNESS 2.0</p>
+            <h1>Entrenamiento que se ajusta solo.</h1>
+            <p className="subtitle">
+              Perfil → rutina → registro → progresión. Todo se recalcula al cambiar tus datos o tu recuperación.
+            </p>
           </div>
+          <div className="pill">Guardado local automático</div>
+        </header>
 
-          {/* RESULTADOS */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* METABOLISMO */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
-              <h2 style={{ fontSize: 14, fontFamily: "monospace", color: C.muted, marginBottom: 12 }}>METABOLISMO</h2>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: C.muted, fontFamily: "monospace", marginBottom: 4 }}>BMR</div>
-                  <div style={{ fontSize: 22, fontWeight: 700 }}>{resultado.bmr}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>kcal/día</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: C.muted, fontFamily: "monospace", marginBottom: 4 }}>TDEE</div>
-                  <div style={{ fontSize: 22, fontWeight: 700 }}>{resultado.tdee}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>kcal/día</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: C.muted, fontFamily: "monospace", marginBottom: 4 }}>META</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: C.effort }}>{resultado.calorias}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>kcal/día</div>
-                </div>
+        <div className="layout">
+          <aside className="card sidebar">
+            <h2 className="section-title">PERFIL</h2>
+
+            <Field label="PESO (KG)">
+              <input className="control" type="number" min="35" max="250" value={profile.peso} onChange={updateProfile("peso")} />
+            </Field>
+            <Field label="ESTATURA (CM)">
+              <input className="control" type="number" min="120" max="230" value={profile.estatura} onChange={updateProfile("estatura")} />
+            </Field>
+            <Field label="EDAD">
+              <input className="control" type="number" min="14" max="90" value={profile.edad} onChange={updateProfile("edad")} />
+            </Field>
+            <Field label="SEXO">
+              <select className="control" value={profile.sexo} onChange={updateProfile("sexo")}>
+                <option value="hombre">Hombre</option>
+                <option value="mujer">Mujer</option>
+              </select>
+            </Field>
+            <Field label="EXPERIENCIA">
+              <select className="control" value={profile.experiencia} onChange={updateProfile("experiencia")}>
+                <option value="nunca">Principiante</option>
+                <option value="basico">Básico</option>
+                <option value="intermedio">Intermedio</option>
+              </select>
+            </Field>
+            <Field label="OBJETIVO">
+              <select className="control" value={profile.objetivo} onChange={updateProfile("objetivo")}>
+                <option value="hipertrofia">Hipertrofia</option>
+                <option value="fuerza">Fuerza</option>
+                <option value="perdida">Pérdida de grasa</option>
+              </select>
+            </Field>
+            <Field label="DÍAS / SEMANA">
+              <select className="control" value={profile.dias} onChange={updateProfile("dias")}>
+                {[2, 3, 4, 5, 6].map((day) => <option key={day} value={day}>{day}</option>)}
+              </select>
+            </Field>
+            <Field label="ACTIVIDAD FUERA DEL GYM">
+              <select className="control" value={profile.actividad} onChange={updateProfile("actividad")}>
+                <option value="sedentario">Sedentaria</option>
+                <option value="ligero">Ligera</option>
+                <option value="activo">Activa</option>
+              </select>
+            </Field>
+            <Field label="EQUIPO">
+              <select className="control" value={profile.equipo} onChange={updateProfile("equipo")}>
+                <option value="gym">Gimnasio completo</option>
+                <option value="home">Casa / mancuernas</option>
+              </select>
+            </Field>
+            <Field label="DURACIÓN POR SESIÓN">
+              <select className="control" value={profile.duracion} onChange={updateProfile("duracion")}>
+                {[45, 60, 75, 90].map((minutes) => <option key={minutes} value={minutes}>{minutes} min</option>)}
+              </select>
+            </Field>
+          </aside>
+
+          <section className="stack">
+            <div className="card">
+              <h2 className="section-title">RESUMEN AUTOMÁTICO</h2>
+              <div className="metrics">
+                <Metric label="BMR" value={nutrition.bmr} unit="kcal / día" />
+                <Metric label="TDEE" value={nutrition.tdee} unit="kcal / día" />
+                <Metric label="META" value={nutrition.target} unit="kcal / día" accent />
+                <Metric label="SPLIT" value={plan.name} unit={`${plan.sessions.length} sesiones`} />
               </div>
-              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 12, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: C.muted, fontFamily: "monospace", marginBottom: 4 }}>PROTEÍNA</div>
-                  <div style={{ fontSize: 22, fontWeight: 700 }}>{resultado.macros.proteina}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>g/día</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: C.muted, fontFamily: "monospace", marginBottom: 4 }}>GRASAS</div>
-                  <div style={{ fontSize: 22, fontWeight: 700 }}>{resultado.macros.grasa}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>g/día</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: C.muted, fontFamily: "monospace", marginBottom: 4 }}>CARBOS</div>
-                  <div style={{ fontSize: 22, fontWeight: 700 }}>{resultado.macros.carbos}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>g/día</div>
-                </div>
+              <div className="macro-row">
+                <div className="macro"><span>PROTEÍNA</span><strong>{nutrition.macros.protein} g</strong></div>
+                <div className="macro"><span>GRASAS</span><strong>{nutrition.macros.fat} g</strong></div>
+                <div className="macro"><span>CARBOS</span><strong>{nutrition.macros.carbs} g</strong></div>
               </div>
             </div>
 
-            {/* SPLIT */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
-              <h2 style={{ fontSize: 14, fontFamily: "monospace", color: C.muted, marginBottom: 12 }}>SPLIT</h2>
-              <p style={{ fontSize: 18, fontWeight: 700, color: C.effort, margin: 0 }}>{resultado.split.nombre}</p>
-              <div style={{ marginTop: 12 }}>
-                {resultado.split.sesiones.map((s, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, background: C.surface2, borderRadius: 8, padding: "8px 12px", marginBottom: 6, fontSize: 13 }}>
-                    <span style={{ fontFamily: "monospace", color: C.effort, fontWeight: 600 }}>{s.dia}</span>
-                    <span>{s.grupos.join(" • ")}</span>
+            <div className="card">
+              <h2 className="section-title">CHECK-IN DE RECUPERACIÓN</h2>
+              <div className="readiness-grid">
+                <Field label="ENERGÍA · 1 BAJA / 5 ALTA">
+                  <div className="range-line">
+                    <input type="range" min="1" max="5" value={readiness.energia} onChange={updateReadiness("energia")} />
+                    <span className="range-value">{readiness.energia}</span>
                   </div>
+                </Field>
+                <Field label="SUEÑO · 1 MALO / 5 BUENO">
+                  <div className="range-line">
+                    <input type="range" min="1" max="5" value={readiness.sueno} onChange={updateReadiness("sueno")} />
+                    <span className="range-value">{readiness.sueno}</span>
+                  </div>
+                </Field>
+                <Field label="DOLOR / AGUJETAS · 1 BAJO / 5 ALTO">
+                  <div className="range-line">
+                    <input type="range" min="1" max="5" value={readiness.dolor} onChange={updateReadiness("dolor")} />
+                    <span className="range-value">{readiness.dolor}</span>
+                  </div>
+                </Field>
+              </div>
+              <div className="readiness-status">
+                <span>Estado del entrenamiento</span>
+                <strong className={`status-${plan.readiness.status}`}>{plan.readiness.label} · {plan.readiness.score}/15</strong>
+              </div>
+            </div>
+
+            <div className="card">
+              <h2 className="section-title">RUTINA GENERADA</h2>
+              <div className="session-tabs">
+                {plan.sessions.map((item, index) => (
+                  <button
+                    type="button"
+                    key={item.label}
+                    className={`tab ${index === activeDay ? "active" : ""}`}
+                    onClick={() => setActiveDay(index)}
+                  >
+                    Día {index + 1}
+                  </button>
                 ))}
               </div>
-              <div style={{ marginTop: 12, padding: "8px 12px", background: C.surface2, borderRadius: 8, fontSize: 11, fontFamily: "monospace", color: C.muted }}>
-                Series: {resultado.params.series} | Reps: {resultado.params.reps} | Descanso: {resultado.params.descanso}
+
+              <div className="session-head">
+                <h2>{session.label}</h2>
+                <span>{GOAL_LABELS[profile.objetivo]} · {EXPERIENCE_LABELS[profile.experiencia]}</span>
+              </div>
+
+              <div className="exercise-list">
+                {session.exercises.map((exercise) => {
+                  const previous = lastByExercise[exercise.id];
+                  const advice = nextLoadAdvice(exercise, previous);
+                  const draft = drafts[exercise.id] || {};
+                  const p = exercise.prescription;
+
+                  return (
+                    <article className="exercise" key={exercise.id}>
+                      <div className="exercise-top">
+                        <div>
+                          <div className="exercise-name">{exercise.name}</div>
+                          <div className="exercise-group">{exercise.group} · {exercise.type === "compound" ? "Compuesto" : "Aislamiento"}</div>
+                        </div>
+                        <div>
+                          <div className="prescription">{p.sets} × {p.min}-{p.max} · RIR {p.rir}</div>
+                          <div className="exercise-meta">Descanso {formatRest(p.rest)}</div>
+                        </div>
+                      </div>
+
+                      <div className="log-grid">
+                        <div>
+                          <label>CARGA KG</label>
+                          <input
+                            className="log-input"
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            placeholder={advice.nextWeight ?? "0"}
+                            value={draft.weight ?? ""}
+                            onChange={(e) => updateDraft(exercise.id, "weight", e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label>REPS MÍN.</label>
+                          <input
+                            className="log-input"
+                            type="number"
+                            min="1"
+                            max="50"
+                            placeholder={`${p.min}-${p.max}`}
+                            value={draft.reps ?? ""}
+                            onChange={(e) => updateDraft(exercise.id, "reps", e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label>RIR REAL</label>
+                          <input
+                            className="log-input"
+                            type="number"
+                            min="0"
+                            max="8"
+                            placeholder={p.rir}
+                            value={draft.rir ?? ""}
+                            onChange={(e) => updateDraft(exercise.id, "rir", e.target.value)}
+                          />
+                        </div>
+                        <button type="button" className="save-btn" onClick={() => saveExercise(exercise)}>Guardar</button>
+                      </div>
+
+                      <div className="advice">
+                        <span>{previous ? `Último: ${previous.weight} kg × ${previous.reps} · RIR ${previous.rir}` : "Sin historial todavía"}</span>
+                        <strong>{advice.action}</strong>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </div>
-          </div>
+
+            <div className="card">
+              <h2 className="section-title">HISTORIAL RECIENTE</h2>
+              {logs.length === 0 ? (
+                <div className="empty">Cuando guardes ejercicios aparecerán aquí y el motor empezará a recomendar la siguiente carga.</div>
+              ) : (
+                <div className="history">
+                  {[...logs].reverse().slice(0, 8).map((log) => (
+                    <div className="history-row" key={log.id}>
+                      <div className="history-main">
+                        <strong>{log.exerciseName}</strong>
+                        <span>{log.session}</span>
+                      </div>
+                      <div className="history-date">
+                        {log.weight} kg · {log.reps} reps · RIR {log.rir}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="card">
+              <p className="footer-note">
+                Motor orientativo: las calorías son una estimación y la progresión usa doble progresión simplificada. Dolor agudo, lesión, mareo o síntomas inusuales deben prevalecer sobre cualquier recomendación automática.
+              </p>
+            </div>
+          </section>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
