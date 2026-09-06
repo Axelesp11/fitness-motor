@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import "./pwa.css";
 
 const UI_KEY = "fitness-motor-uix-v1";
@@ -45,6 +46,8 @@ export default function PwaShell({ children }) {
   const [installed, setInstalled] = useState(() => isStandalone());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [prefs, setPrefs] = useState(readUiPrefs);
+  const motionLevel = prefs.motion;
+  const motionOff = motionLevel === "reduced";
 
   const buzz = (pattern) => {
     if (!prefs.haptics || document.visibilityState !== "visible") return;
@@ -123,7 +126,7 @@ export default function PwaShell({ children }) {
   const goTo = (selector) => {
     buzz(9);
     document.querySelector(selector)?.scrollIntoView({
-      behavior: prefs.motion === "reduced" ? "auto" : "smooth",
+      behavior: motionOff ? "auto" : "smooth",
       block: "start",
     });
   };
@@ -141,68 +144,116 @@ export default function PwaShell({ children }) {
     setPrefs((current) => ({ ...current, palette }));
   };
 
-  const setMotion = (motion) => {
+  const setMotion = (nextMotion) => {
     buzz(8);
-    setPrefs((current) => ({ ...current, motion }));
+    setPrefs((current) => ({ ...current, motion: nextMotion }));
   };
 
+  const spring = motionLevel === "full"
+    ? { type: "spring", stiffness: 420, damping: 31, mass: .8 }
+    : { duration: .24, ease: [0.22, 1, 0.36, 1] };
+
   return (
-    <div className="ux-root">
-      <div className="ux-ambient" aria-hidden="true"><i /><i /><i /></div>
-      {children}
-
-      {!installed && installPrompt ? (
-        <button className="pwa-install" type="button" onClick={install}>
-          <span className="pwa-install-icon" aria-hidden="true">↓</span>
-          <span><strong>Instalar Motor Fitness</strong><small>Abrir como app en tu teléfono</small></span>
-        </button>
-      ) : null}
-
-      <nav className="ux-dock" aria-label="Navegación rápida">
-        <button type="button" onClick={() => goTo(".header")}><Icon name="home"/><span>Inicio</span></button>
-        <button className="ux-dock-main" type="button" onClick={() => goTo(".routine-card")}><Icon name="bolt"/><span>Entreno</span></button>
-        <button type="button" onClick={() => goTo(".history")}><Icon name="chart"/><span>Progreso</span></button>
-        <button type="button" onClick={() => { buzz(9); setSettingsOpen(true); }}><Icon name="gear"/><span>Ajustes</span></button>
-      </nav>
-
-      {settingsOpen ? (
-        <div className="ux-settings-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
-          <section className="ux-settings-sheet" role="dialog" aria-modal="true" aria-labelledby="ux-settings-title">
-            <div className="ux-sheet-handle" aria-hidden="true" />
-            <div className="ux-sheet-head">
-              <div><span>UIX CONTROL</span><h2 id="ux-settings-title">Hazla tuya.</h2></div>
-              <button className="ux-close" type="button" aria-label="Cerrar ajustes" onClick={() => setSettingsOpen(false)}><Icon name="close"/></button>
-            </div>
-
-            <div className="ux-setting-block">
-              <div className="ux-setting-copy"><strong>Color de energía</strong><span>Cambia la identidad visual completa.</span></div>
-              <div className="ux-palettes">
-                {PALETTES.map((item) => (
-                  <button key={item.id} type="button" className={prefs.palette === item.id ? "active" : ""} onClick={() => setPalette(item.id)}>
-                    <i style={{ "--swatch": item.color }} /><span>{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="ux-setting-block">
-              <div className="ux-setting-copy"><strong>Movimiento</strong><span>Cuánto vive y responde la interfaz.</span></div>
-              <div className="ux-segmented">
-                {[ ["full","Máximo"], ["soft","Suave"], ["reduced","Mínimo"] ].map(([value,label]) => (
-                  <button key={value} className={prefs.motion === value ? "active" : ""} type="button" onClick={() => setMotion(value)}>{label}</button>
-                ))}
-              </div>
-            </div>
-
-            <button className="ux-toggle-row" type="button" onClick={() => setPrefs((current) => ({ ...current, haptics: !current.haptics }))}>
-              <span><strong>Respuesta háptica</strong><small>Vibración ligera en acciones importantes.</small></span>
-              <i className={prefs.haptics ? "on" : ""}><b /></i>
-            </button>
-
-            <div className="ux-sheet-note">Los ajustes visuales se guardan solo en este dispositivo.</div>
-          </section>
+    <MotionConfig reducedMotion={motionOff ? "always" : "user"}>
+      <div className="ux-root">
+        <div className="ux-ambient" aria-hidden="true">
+          <motion.i animate={motionOff ? undefined : { x: [0, 90, 18], y: [0, 55, 105], scale: [1, 1.15, .92] }} transition={{ duration: 15, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }} />
+          <motion.i animate={motionOff ? undefined : { x: [0, -85, -22], y: [0, 75, 125], scale: [1, .88, 1.12] }} transition={{ duration: 19, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }} />
+          <motion.i animate={motionOff ? undefined : { x: [0, 70, 120], y: [0, -45, -88], scale: [1, 1.2, .96] }} transition={{ duration: 22, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }} />
         </div>
-      ) : null}
-    </div>
+
+        {children}
+
+        <AnimatePresence>
+          {!installed && installPrompt ? (
+            <motion.button
+              className="pwa-install"
+              type="button"
+              onClick={install}
+              initial={{ opacity: 0, y: 18, x: "-50%", scale: .96 }}
+              animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
+              exit={{ opacity: 0, y: 14, x: "-50%", scale: .96 }}
+              transition={spring}
+              whileTap={{ scale: .97 }}
+            >
+              <span className="pwa-install-icon" aria-hidden="true">↓</span>
+              <span><strong>Instalar Motor Fitness</strong><small>Abrir como app en tu teléfono</small></span>
+            </motion.button>
+          ) : null}
+        </AnimatePresence>
+
+        <motion.nav
+          className="ux-dock"
+          aria-label="Navegación rápida"
+          initial={{ opacity: 0, y: 32, x: "-50%", scale: .92 }}
+          animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
+          transition={{ ...spring, delay: .08 }}
+        >
+          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => goTo(".header")}><Icon name="home"/><span>Inicio</span></motion.button>
+          <motion.button className="ux-dock-main" type="button" whileTap={{ scale: .9 }} onClick={() => goTo(".routine-card")}><Icon name="bolt"/><span>Entreno</span></motion.button>
+          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => goTo(".history")}><Icon name="chart"/><span>Progreso</span></motion.button>
+          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => { buzz(9); setSettingsOpen(true); }}><Icon name="gear"/><span>Ajustes</span></motion.button>
+        </motion.nav>
+
+        <AnimatePresence>
+          {settingsOpen ? (
+            <motion.div
+              className="ux-settings-layer"
+              role="presentation"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: .2 }}
+              onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}
+            >
+              <motion.section
+                className="ux-settings-sheet"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="ux-settings-title"
+                initial={{ opacity: 0, y: 48, scale: .955 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 34, scale: .97 }}
+                transition={spring}
+              >
+                <div className="ux-sheet-handle" aria-hidden="true" />
+                <div className="ux-sheet-head">
+                  <div><span>UIX CONTROL</span><h2 id="ux-settings-title">Hazla tuya.</h2></div>
+                  <motion.button className="ux-close" type="button" aria-label="Cerrar ajustes" whileTap={{ scale: .88, rotate: 4 }} onClick={() => setSettingsOpen(false)}><Icon name="close"/></motion.button>
+                </div>
+
+                <div className="ux-setting-block">
+                  <div className="ux-setting-copy"><strong>Color de energía</strong><span>Cambia la identidad visual completa.</span></div>
+                  <div className="ux-palettes">
+                    {PALETTES.map((item) => (
+                      <motion.button key={item.id} type="button" className={prefs.palette === item.id ? "active" : ""} whileTap={{ scale: .92 }} onClick={() => setPalette(item.id)}>
+                        <motion.i layout style={{ "--swatch": item.color }} animate={prefs.palette === item.id ? { scale: [1, 1.16, 1], rotate: [0, 7, 0] } : { scale: 1 }} transition={{ duration: .34 }} />
+                        <span>{item.label}</span>
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="ux-setting-block">
+                  <div className="ux-setting-copy"><strong>Movimiento</strong><span>Cuánto vive y responde la interfaz.</span></div>
+                  <div className="ux-segmented">
+                    {[ ["full","Máximo"], ["soft","Suave"], ["reduced","Mínimo"] ].map(([value,label]) => (
+                      <motion.button key={value} className={prefs.motion === value ? "active" : ""} type="button" whileTap={{ scale: .94 }} onClick={() => setMotion(value)}>{label}</motion.button>
+                    ))}
+                  </div>
+                </div>
+
+                <motion.button className="ux-toggle-row" type="button" whileTap={{ scale: .985 }} onClick={() => setPrefs((current) => ({ ...current, haptics: !current.haptics }))}>
+                  <span><strong>Respuesta háptica</strong><small>Vibración ligera en acciones importantes.</small></span>
+                  <i className={prefs.haptics ? "on" : ""}><b /></i>
+                </motion.button>
+
+                <div className="ux-sheet-note">Los ajustes visuales se guardan solo en este dispositivo.</div>
+              </motion.section>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+    </MotionConfig>
   );
 }
