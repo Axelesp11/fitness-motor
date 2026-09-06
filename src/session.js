@@ -54,7 +54,12 @@ export function createWorkoutSession(session, sessionIndex = 0, idFactory = null
 }
 
 export function sessionForWorkout(activeWorkout, fallbackSession) {
-  if (activeWorkout?.sessionSnapshot?.exercises?.length) return activeWorkout.sessionSnapshot;
+  if (activeWorkout?.sessionSnapshot?.exercises?.length) {
+    return {
+      ...activeWorkout.sessionSnapshot,
+      label: String(activeWorkout.sessionLabel || activeWorkout.sessionSnapshot.label || "Sesión"),
+    };
+  }
   return fallbackSession;
 }
 
@@ -76,14 +81,6 @@ export function workoutLogs(exerciseLogs = [], sessionCompletions = [], session,
     return exerciseLogs.filter((log) => log?.sessionId === activeWorkout.id);
   }
   return sessionLogsSinceLastCompletion(exerciseLogs, sessionCompletions, session?.label);
-}
-
-export function historicalLogsOutsideWorkout(exerciseLogs = [], activeWorkout = null, exerciseId = null) {
-  return exerciseLogs.filter((log) => {
-    if (activeWorkout?.id && log?.sessionId === activeWorkout.id) return false;
-    if (exerciseId && log?.exerciseId !== exerciseId) return true;
-    return true;
-  });
 }
 
 export function discardWorkoutLogs(exerciseLogs = [], activeWorkout = null) {
