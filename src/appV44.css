@@ -1,0 +1,62 @@
+.session-lock-note {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 14px;
+  padding: 12px 13px;
+  border: 1px solid color-mix(in srgb, var(--ux-a) 26%, rgba(255,255,255,.07));
+  border-radius: 15px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ux-a) 7%, rgba(255,255,255,.025)), rgba(255,255,255,.02));
+}
+
+.session-lock-note strong {
+  color: #f6f8fb;
+  font-size: 11px;
+}
+
+.session-lock-note span {
+  color: #7f8a9d;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.session-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.abandon-btn {
+  color: #d59ba1 !important;
+  border-color: rgba(255, 102, 117, .14) !important;
+}
+
+.abandon-btn.armed {
+  color: #fff !important;
+  border-color: rgba(255, 89, 106, .42) !important;
+  background: linear-gradient(135deg, rgba(183, 44, 61, .35), rgba(101, 24, 38, .28)) !important;
+  box-shadow: 0 8px 24px rgba(142, 32, 48, .18);
+}
+
+.app-v4 input[type="range"]:disabled {
+  opacity: .42;
+  filter: saturate(.5);
+}
+
+.app-v4 .session-overview strong {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .session-head-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .session-head-actions .secondary-btn {
+    width: 100%;
+    min-width: 0 !important;
+  }
+}
