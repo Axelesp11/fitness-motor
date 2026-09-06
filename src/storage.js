@@ -1,5 +1,5 @@
 export const STORAGE_KEY = "fitness-motor-v3";
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const DEFAULT_PROFILE = {
   peso: 75,
@@ -26,6 +26,8 @@ export function createDefaultState() {
     exerciseLogs: [],
     bodyLogs: [],
     sessionCompletions: [],
+    activeWorkout: null,
+    exerciseSubstitutions: {},
     startedAt: new Date().toISOString(),
   };
 }
@@ -70,11 +72,13 @@ export function sanitizeState(input) {
     schemaVersion: SCHEMA_VERSION,
     profile: sanitizeProfile(profile),
     readiness: sanitizeReadiness(readiness),
-    exerciseLogs: Array.isArray(input?.exerciseLogs) ? input.exerciseLogs.map(sanitizeExerciseLog).filter(Boolean).slice(-1000) : [],
+    exerciseLogs: Array.isArray(input?.exerciseLogs) ? input.exerciseLogs.map(sanitizeExerciseLog).filter(Boolean).slice(-1500) : [],
     bodyLogs: Array.isArray(input?.bodyLogs) ? input.bodyLogs.map(sanitizeBodyLog).filter(Boolean).slice(-365) : [],
     sessionCompletions: Array.isArray(input?.sessionCompletions)
-      ? input.sessionCompletions.map(sanitizeCompletion).filter(Boolean).slice(-500)
+      ? input.sessionCompletions.map(sanitizeCompletion).filter(Boolean).slice(-700)
       : [],
+    activeWorkout: sanitizeActiveWorkout(input?.activeWorkout),
+    exerciseSubstitutions: sanitizeSubstitutions(input?.exerciseSubstitutions),
     startedAt: validIso(input?.startedAt) ? input.startedAt : base.startedAt,
   };
 }
@@ -87,7 +91,7 @@ function migrateLegacy(storage) {
     const legacyLogs = readJson(storage, "fitness-motor-logs");
 
     if (profile && typeof profile === "object") state.profile = sanitizeProfile({ ...state.profile, ...profile });
-    if (readiness && typeof readiness === "object") state.readiness = sanitizeReadiness({ ...state.readiness, ...readiness });
+    if (readiness && typeof readiness === "object") state.readiness = sanitizeReadiness(readiness);
     if (Array.isArray(legacyLogs)) {
       state.exerciseLogs = legacyLogs.map((log, index) => sanitizeExerciseLog({
         id: log.id || `legacy-${index}-${Date.now()}`,
@@ -140,6 +144,7 @@ function sanitizeExerciseLog(log) {
 
   return {
     id: String(log.id || cryptoSafeId()),
+    sessionId: log.sessionId ? String(log.sessionId) : null,
     createdAt: validIso(log.createdAt) ? log.createdAt : new Date().toISOString(),
     sessionLabel: String(log.sessionLabel || log.session || "Sesión"),
     exerciseId: String(log.exerciseId),
@@ -161,11 +166,40 @@ function sanitizeBodyLog(log) {
 
 function sanitizeCompletion(item) {
   if (!item) return null;
+  const plannedExercises = Math.max(0, Math.round(finiteNumber(item.plannedExercises, 0)));
+  const completedExercises = Math.max(0, Math.round(finiteNumber(item.completedExercises, 0)));
+  const derivedPct = plannedExercises ? Math.round((completedExercises / plannedExercises) * 100) : 0;
   return {
     id: String(item.id || cryptoSafeId()),
+    sessionId: item.sessionId ? String(item.sessionId) : null,
     createdAt: validIso(item.createdAt) ? item.createdAt : new Date().toISOString(),
+    startedAt: validIso(item.startedAt) ? item.startedAt : null,
     sessionLabel: String(item.sessionLabel || "Sesión"),
+    durationSec: Math.max(0, Math.round(finiteNumber(item.durationSec, 0))),
+    completedExercises,
+    plannedExercises,
+    completionPct: clampNumber(item.completionPct, 0, 100, derivedPct),
   };
+}
+
+function sanitizeActiveWorkout(item) {
+  if (!item?.id || !validIso(item.startedAt)) return null;
+  return {
+    id: String(item.id),
+    sessionLabel: String(item.sessionLabel || "Sesión"),
+    sessionIndex: Math.max(0, Math.round(finiteNumber(item.sessionIndex, 0))),
+    startedAt: item.startedAt,
+    plannedExerciseIds: Array.isArray(item.plannedExerciseIds)
+      ? [...new Set(item.plannedExerciseIds.map((value) => String(value)).filter(Boolean))].slice(0, 30)
+      : [],
+  };
+}
+
+function sanitizeSubstitutions(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key, exerciseId]) => typeof key === "string" && key.length <= 160 && typeof exerciseId === "string" && exerciseId.length <= 100)
+    .slice(0, 100));
 }
 
 function readJson(storage, key) {
