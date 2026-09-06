@@ -1,0 +1,6 @@
+.uix-app-scope { transform: none !important; }
+
+.uix-bottom-nav {
+  translate: -50% 0;
+  transform: none;
+}
