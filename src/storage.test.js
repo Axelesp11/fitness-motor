@@ -14,6 +14,14 @@ describe("storage schema", () => {
     expect(state.readiness.energia).toBe(5);
   });
 
+  it("persists expanded programming goals and PR lift selection", () => {
+    const state = sanitizeState({
+      profile: { objetivo: "pr", prLift: "deadlift", dias: 4 },
+    });
+    expect(state.profile.objetivo).toBe("pr");
+    expect(state.profile.prLift).toBe("deadlift");
+  });
+
   it("round trips a valid backup", () => {
     const initial = createDefaultState();
     const parsed = parseImportedState(JSON.stringify(initial));

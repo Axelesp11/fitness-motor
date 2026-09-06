@@ -5,7 +5,6 @@ import {
   EQUIPMENT_LABELS,
   EXPERIENCE_LABELS,
   FOCUS_OPTIONS,
-  GOAL_LABELS,
   buildPlan,
   calcNutrition,
   detectPR,
@@ -14,6 +13,12 @@ import {
   summarizeExerciseLog,
   warmupPlan,
 } from "./engine";
+import {
+  PROGRAM_GOAL_LABELS,
+  PR_LIFT_OPTIONS,
+  SPLIT_OPTIONS,
+  adaptTrainingPlan,
+} from "./programming";
 import {
   loadState,
   parseImportedState,
@@ -100,7 +105,10 @@ export default function App() {
 
   const { profile, readiness, exerciseLogs, bodyLogs, sessionCompletions } = state;
   const nutrition = useMemo(() => calcNutrition(profile, bodyLogs), [profile, bodyLogs]);
-  const plan = useMemo(() => buildPlan(profile, readiness, sessionCompletions), [profile, readiness, sessionCompletions]);
+  const plan = useMemo(() => {
+    const basePlan = buildPlan(profile, readiness, sessionCompletions);
+    return adaptTrainingPlan(basePlan, profile);
+  }, [profile, readiness, sessionCompletions]);
   const session = plan.sessions[activeDay] ?? plan.sessions[0];
 
   useEffect(() => {
@@ -272,9 +280,9 @@ export default function App() {
       <div className="container">
         <header className="header">
           <div>
-            <p className="eyebrow">MOTOR FITNESS 3.0</p>
-            <h1>Entrena, registra y deja que el plan se recalibre.</h1>
-            <p className="subtitle">Motor local-first para adultos sanos: programación, series reales, recuperación, progresión y nutrición adaptativa.</p>
+            <p className="eyebrow">MOTOR FITNESS 3.1</p>
+            <h1>Entrena para el resultado que realmente buscas.</h1>
+            <p className="subtitle">Objetivo fisiológico y split se programan por separado: PR, fuerza, hipertrofia, potencia, resistencia o pérdida de grasa.</p>
           </div>
           <RestTimer timer={timer} onStart={startRest} onStop={stopRest} />
         </header>
@@ -292,8 +300,9 @@ export default function App() {
             <Field label="EDAD"><input className="control" type="number" min="18" max="90" value={profile.edad} onChange={updateProfile("edad")} /></Field>
             <Field label="SEXO"><select className="control" value={profile.sexo} onChange={updateProfile("sexo")}><option value="hombre">Hombre</option><option value="mujer">Mujer</option></select></Field>
             <Field label="EXPERIENCIA"><select className="control" value={profile.experiencia} onChange={updateProfile("experiencia")}><option value="nunca">Principiante</option><option value="basico">Básico</option><option value="intermedio">Intermedio</option></select></Field>
-            <Field label="OBJETIVO"><select className="control" value={profile.objetivo} onChange={updateProfile("objetivo")}><option value="hipertrofia">Hipertrofia</option><option value="fuerza">Fuerza</option><option value="perdida">Pérdida de grasa</option></select></Field>
-            <Field label="DÍAS / SEMANA"><select className="control" value={profile.dias} onChange={updateProfile("dias")}>{[2,3,4,5,6].map((d) => <option key={d} value={d}>{d}</option>)}</select></Field>
+            <Field label="OBJETIVO" hint="El objetivo cambia reps, series, RIR, descanso y prioridad de ejercicios."><select className="control" value={profile.objetivo} onChange={updateProfile("objetivo")}>{Object.entries(PROGRAM_GOAL_LABELS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+            {profile.objetivo === "pr" ? <Field label="LEVANTAMIENTO PR" hint="El motor intentará programarlo dos veces por semana cuando el split y el equipo lo permitan."><select className="control" value={profile.prLift} onChange={updateProfile("prLift")}>{PR_LIFT_OPTIONS.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></Field> : null}
+            <Field label="DISTRIBUCIÓN / FRECUENCIA" hint="El split distribuye el trabajo; no sustituye al objetivo."><select className="control" value={profile.dias} onChange={updateProfile("dias")}>{SPLIT_OPTIONS.map(([days,label]) => <option key={days} value={days}>{days} días · {label}</option>)}</select></Field>
             <Field label="ACTIVIDAD FUERA DEL ENTRENAMIENTO" hint="Trabajo, pasos y movimiento habitual; el gym se estima aparte."><select className="control" value={profile.actividad} onChange={updateProfile("actividad")}>{Object.entries(ACTIVITY_LABELS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
             <Field label="EQUIPO"><select className="control" value={profile.equipo} onChange={updateProfile("equipo")}>{Object.entries(EQUIPMENT_LABELS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
             <Field label="DURACIÓN"><select className="control" value={profile.duracion} onChange={updateProfile("duracion")}>{[45,60,75,90].map((m) => <option key={m} value={m}>{m} min</option>)}</select></Field>
@@ -304,7 +313,7 @@ export default function App() {
             <section className="card">
               <div className="section-heading">
                 <h2 className="section-title">RESUMEN</h2>
-                <span>{GOAL_LABELS[profile.objetivo]} · {EXPERIENCE_LABELS[profile.experiencia]}</span>
+                <span>{PROGRAM_GOAL_LABELS[profile.objetivo]} · {EXPERIENCE_LABELS[profile.experiencia]}</span>
               </div>
               <div className="metrics">
                 <Metric label="BMR" value={nutrition.bmr} unit="kcal/día" />
@@ -317,6 +326,23 @@ export default function App() {
                 <div className="macro"><span>GRASAS</span><strong>{nutrition.macros.fat} g</strong></div>
                 <div className="macro"><span>CARBOS</span><strong>{nutrition.macros.carbs} g</strong></div>
                 <div className="macro"><span>RITMO META</span><strong>{nutrition.goalRate === 0 ? "Mantener" : `${nutrition.goalRate > 0 ? "+" : ""}${(nutrition.goalRate * 100).toFixed(2)}%/sem`}</strong></div>
+              </div>
+            </section>
+
+            <section className="card">
+              <div className="section-heading"><h2 className="section-title">PROGRAMACIÓN ACTIVA</h2><span>{plan.programming.title}</span></div>
+              <p className="body-copy">{plan.programming.summary}</p>
+              <div className="macro-row">
+                <div className="macro"><span>COMPUESTOS / PRINCIPALES</span><strong>{plan.programming.primaryRange}</strong></div>
+                <div className="macro"><span>ACCESORIOS</span><strong>{plan.programming.accessoryRange}</strong></div>
+                <div className="macro"><span>DESCANSOS</span><strong>{plan.programming.rest}</strong></div>
+                <div className="macro"><span>VOLUMEN</span><strong>Adaptativo</strong></div>
+              </div>
+              <p className="body-copy"><strong>Volumen:</strong> {plan.programming.volume}</p>
+              <p className="body-copy"><strong>Por qué este split:</strong> {plan.programming.splitNote}</p>
+              {plan.programming.warning ? <div className="empty compact">{plan.programming.warning}</div> : null}
+              <div className="volume-grid">
+                {plan.programming.evidence.map((source) => <div className="volume-chip" key={source}><span>Fundamento</span><strong>{source}</strong></div>)}
               </div>
             </section>
 
@@ -363,7 +389,7 @@ export default function App() {
               <div className="session-tabs" role="tablist" aria-label="Días de entrenamiento">
                 {plan.sessions.map((item,index) => <button type="button" role="tab" aria-selected={index===activeDay} key={item.label} className={`tab ${index===activeDay ? "active" : ""}`} onClick={() => setActiveDay(index)}>Día {index+1}</button>)}
               </div>
-              <div className="session-head"><div><h2>{session.label}</h2><span>RIR objetivo ajustado por semana y recuperación</span></div><button className="secondary-btn" type="button" onClick={finishSession}>Finalizar sesión</button></div>
+              <div className="session-head"><div><h2>{session.label}</h2><span>RIR, reps y descansos adaptados al objetivo</span></div><button className="secondary-btn" type="button" onClick={finishSession}>Finalizar sesión</button></div>
 
               <div className="exercise-list">
                 {session.exercises.map((exerciseItem) => {
@@ -378,8 +404,8 @@ export default function App() {
                   return (
                     <article className="exercise" key={exerciseItem.id}>
                       <div className="exercise-top">
-                        <div><div className="exercise-name">{exerciseItem.name}</div><div className="exercise-group">{exerciseItem.group} · {exerciseItem.type === "compound" ? "Compuesto" : "Aislamiento"}</div></div>
-                        <div className="prescription-block"><div className="prescription">{p.sets} × {p.min}-{p.max} · RIR {p.rir}</div><button className="timer-btn" type="button" onClick={() => startRest(p.rest)}>Descanso {formatRest(p.rest)}</button></div>
+                        <div><div className="exercise-name">{exerciseItem.name}</div><div className="exercise-group">{exerciseItem.group} · {exerciseItem.type === "compound" ? "Compuesto" : "Aislamiento"}{exerciseItem.prRole ? ` · PR ${exerciseItem.prRole === "primary" ? "principal" : "técnico"}` : ""}</div></div>
+                        <div className="prescription-block"><div className="prescription">{p.sets} × {p.min}-{p.max} · RIR {p.rir}</div><div className="exercise-meta">{p.intent}</div><button className="timer-btn" type="button" onClick={() => startRest(p.rest)}>Descanso {formatRest(p.rest)}</button></div>
                       </div>
 
                       {warmups.length ? <div className="warmup"><span>Calentamiento sugerido</span>{warmups.map((x,i) => <b key={`${x.weight}-${i}`}>{x.weight}kg × {x.reps}</b>)}</div> : null}
@@ -427,7 +453,7 @@ export default function App() {
             </section>
 
             <footer className="card footer-note">
-              <strong>Alcance.</strong> Diseñado para adultos sanos. Las calorías, el gasto y el e1RM son estimaciones; dolor agudo, lesión, mareo, dolor torácico o síntomas inusuales prevalecen sobre cualquier recomendación del motor. No sustituye valoración médica, nutricional ni de rehabilitación.
+              <strong>Alcance.</strong> Diseñado para adultos sanos. Las calorías, el gasto y el e1RM son estimaciones; dolor agudo, lesión, mareo, dolor torácico o síntomas inusuales prevalecen sobre cualquier recomendación del motor. El modo PR prepara un pico submáximo, pero no sustituye supervisión ni auto-prescribe un intento máximo. No sustituye valoración médica, nutricional ni de rehabilitación.
             </footer>
           </section>
         </div>
