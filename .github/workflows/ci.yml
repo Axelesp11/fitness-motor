@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: fitness-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -26,5 +30,32 @@ jobs:
         run: npm test
       - name: Production build
         run: npm run build
+      - name: Production smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/fitness-preview.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+
+          READY=0
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:4173/ > /tmp/index.html; then
+              READY=1
+              break
+            fi
+            sleep 0.5
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            cat /tmp/fitness-preview.log
+            exit 1
+          fi
+
+          grep -q 'id="root"' /tmp/index.html
+          curl -fsS http://127.0.0.1:4173/manifest.webmanifest > /tmp/manifest.webmanifest
+          curl -fsS http://127.0.0.1:4173/sw.js > /tmp/sw.js
+          grep -q '"name"' /tmp/manifest.webmanifest
+          grep -q 'motor-fitness-shell-v4' /tmp/sw.js
       - name: Runtime dependency audit
         run: npm audit --omit=dev --audit-level=high
