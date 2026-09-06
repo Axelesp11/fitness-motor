@@ -1,0 +1,58 @@
+.app-v4 .primary-btn:disabled,
+.app-v4 .secondary-btn:disabled,
+.app-v4 .save-btn:disabled,
+.app-v4 .control:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  filter: saturate(.65);
+}
+
+.app-v4 .session-overview:has(.session-progress-track i[style*="100%"]) {
+  border-color: color-mix(in srgb, var(--ux-b) 38%, rgba(255,255,255,.08));
+}
+
+.app-v4 .warmup .control {
+  min-width: min(100%, 240px);
+  min-height: 38px;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+
+.app-v4 .status-regression {
+  border-color: rgba(255, 103, 110, .22);
+  background: linear-gradient(135deg, rgba(255, 79, 94, .08), rgba(255,255,255,.025));
+}
+
+.app-v4 .status-caution {
+  border-color: rgba(255, 193, 91, .2);
+  background: linear-gradient(135deg, rgba(255, 182, 67, .07), rgba(255,255,255,.025));
+}
+
+.app-v4 .status-improving {
+  border-color: rgba(98, 255, 184, .2);
+  background: linear-gradient(135deg, rgba(62, 235, 159, .065), rgba(255,255,255,.025));
+}
+
+.app-v4 .routine-card .session-head button:disabled {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 760px) {
+  .app-v4 .warmup {
+    align-items: stretch;
+  }
+
+  .app-v4 .warmup .control {
+    width: 100%;
+  }
+
+  .app-v4 .session-overview-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .app-v4 .session-overview-row strong {
+    font-size: 11px;
+    line-height: 1.2;
+  }
+}
