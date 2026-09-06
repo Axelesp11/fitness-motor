@@ -1,3 +1,4 @@
+import { calculateWeeklyVolume } from "./engine.js";
 import { analyzePerformanceTrend } from "./progression.js";
 
 export function assessProgramFatigue(logs = []) {
@@ -94,7 +95,11 @@ export function applyProgramFatigue(plan, fatigue) {
     })),
   }));
 
-  return withRirMetadata({ ...plan, sessions }, fatigue);
+  return withRirMetadata({
+    ...plan,
+    sessions,
+    weeklyVolume: calculateWeeklyVolume(sessions),
+  }, fatigue);
 }
 
 export function withRirMetadata(plan, fatigue) {
