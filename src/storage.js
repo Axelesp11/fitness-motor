@@ -13,6 +13,7 @@ export const DEFAULT_PROFILE = {
   equipo: "gym",
   duracion: 60,
   enfoque: "balanced",
+  prLift: "bench_press",
 };
 
 export const DEFAULT_READINESS = { energia: 4, sueno: 4, dolor: 2 };
@@ -110,12 +111,13 @@ function sanitizeProfile(profile) {
     edad: clampNumber(profile.edad, 18, 90, DEFAULT_PROFILE.edad),
     sexo: ["hombre", "mujer"].includes(profile.sexo) ? profile.sexo : DEFAULT_PROFILE.sexo,
     experiencia: ["nunca", "basico", "intermedio"].includes(profile.experiencia) ? profile.experiencia : DEFAULT_PROFILE.experiencia,
-    objetivo: ["hipertrofia", "fuerza", "perdida"].includes(profile.objetivo) ? profile.objetivo : DEFAULT_PROFILE.objetivo,
+    objetivo: ["hipertrofia", "fuerza", "pr", "potencia", "resistencia", "perdida"].includes(profile.objetivo) ? profile.objetivo : DEFAULT_PROFILE.objetivo,
     dias: clampNumber(profile.dias, 2, 6, DEFAULT_PROFILE.dias),
     actividad: ["sedentario", "ligero", "activo", "muy_activo"].includes(profile.actividad) ? profile.actividad : DEFAULT_PROFILE.actividad,
     equipo: ["gym", "home", "minimal"].includes(profile.equipo) ? profile.equipo : DEFAULT_PROFILE.equipo,
     duracion: [45, 60, 75, 90].includes(Number(profile.duracion)) ? Number(profile.duracion) : DEFAULT_PROFILE.duracion,
     enfoque: ["balanced", "Pecho", "Espalda", "Piernas", "Hombro", "Brazos"].includes(profile.enfoque) ? profile.enfoque : DEFAULT_PROFILE.enfoque,
+    prLift: ["bench_press", "back_squat", "deadlift", "overhead_press"].includes(profile.prLift) ? profile.prLift : DEFAULT_PROFILE.prLift,
   };
 }
 
