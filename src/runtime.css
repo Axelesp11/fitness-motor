@@ -1,0 +1,128 @@
+.runtime-banner {
+  position: fixed;
+  z-index: 150;
+  left: 50%;
+  bottom: calc(var(--ux-dock-h, 74px) + max(18px, env(safe-area-inset-bottom)));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: min(calc(100vw - 24px), 470px);
+  min-height: 62px;
+  padding: 11px 13px 11px 15px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 20px;
+  color: #f8fafc;
+  background: rgba(13, 17, 24, .93);
+  box-shadow: 0 18px 55px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+}
+
+.runtime-banner.offline {
+  border-color: rgba(255, 187, 82, .25);
+}
+
+.runtime-banner.update {
+  border-color: color-mix(in srgb, var(--ux-a, #7c5cff) 38%, rgba(255,255,255,.1));
+}
+
+.runtime-banner strong,
+.runtime-banner span {
+  display: block;
+}
+
+.runtime-banner strong {
+  font-size: 12px;
+}
+
+.runtime-banner span {
+  margin-top: 3px;
+  color: #8e99aa;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.runtime-banner button {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--ux-a, #7c5cff), var(--ux-b, #28d8ff));
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.runtime-fallback {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #f8fafc;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(115, 76, 255, .18), transparent 26rem),
+    radial-gradient(circle at 82% 88%, rgba(0, 214, 255, .12), transparent 24rem),
+    #06080d;
+}
+
+.runtime-fallback section {
+  width: min(100%, 520px);
+  padding: 28px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 28px;
+  background: rgba(17, 21, 30, .88);
+  box-shadow: 0 28px 80px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+.runtime-fallback section > span {
+  color: #8ba2ff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .16em;
+}
+
+.runtime-fallback h1 {
+  margin: 9px 0 10px;
+  font-size: clamp(30px, 9vw, 52px);
+  letter-spacing: -.055em;
+}
+
+.runtime-fallback p {
+  color: #98a3b4;
+  line-height: 1.55;
+}
+
+.runtime-fallback section > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-top: 20px;
+}
+
+.runtime-fallback button {
+  min-height: 48px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 15px;
+  color: #fff;
+  background: rgba(255,255,255,.055);
+  font-weight: 850;
+}
+
+.runtime-fallback button:last-child {
+  border: 0;
+  background: linear-gradient(135deg, #725cff, #1fbde8);
+}
+
+@media (max-width: 430px) {
+  .runtime-banner {
+    align-items: flex-start;
+  }
+  .runtime-banner span {
+    max-width: 250px;
+  }
+  .runtime-fallback section > div {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,4 +1,4 @@
-# Motor Fitness 4.2
+# Motor Fitness 4.3
 
 Motor local-first de entrenamiento y nutrición orientativa para adultos sanos, diseñado primero para móvil/PWA.
 
@@ -19,21 +19,22 @@ Motor local-first de entrenamiento y nutrición orientativa para adultos sanos, 
 - Incluye temporizador de 1 a 5 minutos con progreso visual.
 - Lleva un mesociclo automático de seis semanas con descarga.
 - Calcula volumen semanal equivalente por grupo muscular.
-- Permite **sustituir ejercicios** por alternativas del mismo grupo y tipo cuando el plan dispone de variantes compatibles.
-- Conserva las sustituciones hasta restablecerlas.
+- Permite **sustituir ejercicios** por alternativas del mismo grupo y tipo disponibles en el plan y conserva la elección por día.
 - Modela una sesión real con `sessionId`, inicio, duración, porcentaje completado y conteo de ejercicios.
 - Exige al menos 50% de los ejercicios planificados para cerrar una sesión y evita cierres vacíos.
 - Guarda todo en el navegador y permite exportar/importar un respaldo JSON.
 
-## UIX 4.2
+## UIX + Reliability 4.3
 
 - React + Motion for React.
 - Interfaz training-first: sesión actual, progresión y recuperación antes que configuración.
 - Dock inferior para navegación rápida en PWA.
 - Paletas visuales, intensidad de movimiento y hápticos configurables.
-- Configuración del motor en sheet independiente de los ajustes visuales.
-- RIR mostrado desde la **prescripción real** del plan, no desde una etiqueta genérica del mesociclo.
+- RIR mostrado desde la **prescripción real** del plan.
 - Historial de sesiones con duración y porcentaje de cumplimiento.
+- Estado offline visible sin bloquear los registros locales.
+- Comprobación de actualización del Service Worker al abrir/volver a la app; una versión nueva se ofrece sin forzar una recarga durante el entrenamiento.
+- Error Boundary de recuperación: ante un fallo de render evita una pantalla blanca y permite exportar el estado local antes de recargar.
 - Gradientes dinámicos, glassmorphism y microinteracciones con soporte para `prefers-reduced-motion`.
 
 ## Arquitectura
@@ -49,6 +50,8 @@ Motor local-first de entrenamiento y nutrición orientativa para adultos sanos, 
 - `programFatigue.js`: detección de fatiga objetiva sistémica y ajuste conservador.
 - `session.js`: sesión activa, progreso, duración y cierre.
 - `substitution.js`: sustituciones persistentes compatibles con la estructura del plan.
+- `RuntimeGuard.jsx`: conectividad y ciclo de actualización PWA.
+- `AppErrorBoundary.jsx`: recuperación ante errores de render.
 - `programming.js`: prescripción fisiológica y splits.
 - `engine.js`: cálculos base, biblioteca, nutrición y métricas.
 
@@ -61,6 +64,13 @@ npm install
 npm run dev
 ```
 
+Para servir exactamente el build de producción:
+
+```bash
+npm run build
+npm run preview
+```
+
 ## Calidad
 
 ```bash
@@ -69,7 +79,7 @@ npm run build
 npm run check
 ```
 
-CI ejecuta pruebas unitarias, build de producción y auditoría de dependencias runtime en cada PR a `main`.
+CI ejecuta pruebas unitarias, build de producción, **smoke test HTTP** del sitio compilado (shell, manifest y service worker) y auditoría de dependencias runtime en cada PR a `main`. Los runs redundantes de la misma rama se cancelan para no validar commits obsoletos.
 
 ## Evidencia y benchmark
 
