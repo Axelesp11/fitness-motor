@@ -3,15 +3,64 @@ function safeTime(value) {
   return Number.isFinite(time) ? time : 0;
 }
 
-export function createWorkoutSession(session, sessionIndex = 0, idFactory = null, now = new Date()) {
+function snapshotExercise(item) {
+  return {
+    id: String(item?.id || "exercise"),
+    name: String(item?.name || item?.id || "Ejercicio"),
+    group: String(item?.group || "Otro"),
+    type: item?.type === "isolation" ? "isolation" : "compound",
+    loadType: String(item?.loadType || "external"),
+    increment: Number.isFinite(Number(item?.increment)) ? Number(item.increment) : 1,
+    secondary: Array.isArray(item?.secondary) ? item.secondary.map(String).slice(0, 8) : [],
+    prRole: item?.prRole === "primary" || item?.prRole === "secondary" ? item.prRole : null,
+    substitutionSourceId: item?.substitutionSourceId ? String(item.substitutionSourceId) : null,
+    prescription: {
+      sets: Math.max(1, Math.round(Number(item?.prescription?.sets) || 1)),
+      min: Math.max(1, Math.round(Number(item?.prescription?.min) || 1)),
+      max: Math.max(1, Math.round(Number(item?.prescription?.max) || 1)),
+      rir: Math.max(0, Math.min(8, Math.round(Number(item?.prescription?.rir) || 0))),
+      rest: Math.max(0, Math.round(Number(item?.prescription?.rest) || 0)),
+      intent: String(item?.prescription?.intent || "Técnica consistente"),
+    },
+  };
+}
+
+export function snapshotSession(session) {
+  if (!session) return null;
+  return {
+    label: String(session.label || "Sesión"),
+    template: String(session.template || "session"),
+    exercises: (session.exercises ?? []).map(snapshotExercise).slice(0, 30),
+  };
+}
+
+export function createWorkoutSession(session, sessionIndex = 0, idFactory = null, now = new Date(), metadata = {}) {
   const id = idFactory?.() ?? globalThis.crypto?.randomUUID?.() ?? `${now.getTime()}-${Math.random().toString(36).slice(2)}`;
+  const sessionSnapshot = snapshotSession(session);
   return {
     id,
     sessionLabel: String(session?.label || "Sesión"),
     sessionIndex: Math.max(0, Number(sessionIndex) || 0),
     startedAt: now.toISOString(),
     plannedExerciseIds: (session?.exercises ?? []).map((item) => String(item.id)),
+    sessionSnapshot,
+    planContext: {
+      objective: metadata.objective ? String(metadata.objective) : null,
+      week: Number.isFinite(Number(metadata.week)) ? Number(metadata.week) : null,
+      targetRir: metadata.targetRir != null ? String(metadata.targetRir) : null,
+      fatigueStatus: metadata.fatigueStatus ? String(metadata.fatigueStatus) : null,
+    },
   };
+}
+
+export function sessionForWorkout(activeWorkout, fallbackSession) {
+  if (activeWorkout?.sessionSnapshot?.exercises?.length) {
+    return {
+      ...activeWorkout.sessionSnapshot,
+      label: String(activeWorkout.sessionLabel || activeWorkout.sessionSnapshot.label || "Sesión"),
+    };
+  }
+  return fallbackSession;
 }
 
 export function sessionLogsSinceLastCompletion(exerciseLogs = [], sessionCompletions = [], sessionLabel) {
@@ -32,6 +81,11 @@ export function workoutLogs(exerciseLogs = [], sessionCompletions = [], session,
     return exerciseLogs.filter((log) => log?.sessionId === activeWorkout.id);
   }
   return sessionLogsSinceLastCompletion(exerciseLogs, sessionCompletions, session?.label);
+}
+
+export function discardWorkoutLogs(exerciseLogs = [], activeWorkout = null) {
+  if (!activeWorkout?.id) return exerciseLogs;
+  return exerciseLogs.filter((log) => log?.sessionId !== activeWorkout.id);
 }
 
 export function sessionProgress(session, exerciseLogs = [], sessionCompletions = [], activeWorkout = null) {
@@ -70,6 +124,7 @@ export function completeWorkout(activeWorkout, progress, now = new Date(), idFac
     completedExercises: Number(progress.completed || 0),
     plannedExercises: Number(progress.planned || 0),
     completionPct: Number(progress.percent || 0),
+    objective: activeWorkout.planContext?.objective || null,
   };
 }
 

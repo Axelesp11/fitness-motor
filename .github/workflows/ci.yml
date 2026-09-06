@@ -56,6 +56,6 @@ jobs:
           curl -fsS http://127.0.0.1:4173/manifest.webmanifest > /tmp/manifest.webmanifest
           curl -fsS http://127.0.0.1:4173/sw.js > /tmp/sw.js
           grep -q '"name"' /tmp/manifest.webmanifest
-          grep -q 'motor-fitness-shell-v4' /tmp/sw.js
+          grep -q 'motor-fitness-shell-v5' /tmp/sw.js
       - name: Runtime dependency audit
         run: npm audit --omit=dev --audit-level=high

@@ -1,4 +1,4 @@
-# Motor Fitness 4.3
+# Motor Fitness 4.4
 
 Motor local-first de entrenamiento y nutrición orientativa para adultos sanos, diseñado primero para móvil/PWA.
 
@@ -18,23 +18,25 @@ Motor local-first de entrenamiento y nutrición orientativa para adultos sanos, 
 - Sugiere calentamientos para movimientos con carga externa.
 - Incluye temporizador de 1 a 5 minutos con progreso visual.
 - Lleva un mesociclo automático de seis semanas con descarga.
-- Calcula volumen semanal equivalente por grupo muscular.
-- Permite **sustituir ejercicios** por alternativas del mismo grupo y tipo disponibles en el plan y conserva la elección por día.
+- Permite sustituir ejercicios por alternativas compatibles y conserva la elección por día.
 - Modela una sesión real con `sessionId`, inicio, duración, porcentaje completado y conteo de ejercicios.
-- Exige al menos 50% de los ejercicios planificados para cerrar una sesión y evita cierres vacíos.
+- Al iniciar, guarda un **snapshot inmutable** de ejercicios y prescripciones: series, rango de reps, RIR, descanso e intención permanecen fijos hasta cerrar o abandonar esa sesión.
+- La autorregulación que cambie mientras entrenas queda preparada para la **siguiente** sesión, no modifica la actual.
+- Exige al menos 50% de los ejercicios planificados para cerrar una sesión.
+- Permite abandonar con doble confirmación; elimina solo los logs de esa sesión y no crea una finalización falsa.
 - Guarda todo en el navegador y permite exportar/importar un respaldo JSON.
 
-## UIX + Reliability 4.3
+## UIX + Reliability 4.4
 
 - React + Motion for React.
 - Interfaz training-first: sesión actual, progresión y recuperación antes que configuración.
 - Dock inferior para navegación rápida en PWA.
 - Paletas visuales, intensidad de movimiento y hápticos configurables.
-- RIR mostrado desde la **prescripción real** del plan.
-- Historial de sesiones con duración y porcentaje de cumplimiento.
+- Estado de sesión congelada visible y controles de programación bloqueados mientras entrenas.
+- Historial de sesiones con duración y porcentaje de cumplimiento; registros legacy se identifican como históricos en lugar de mostrar 0% falso.
 - Estado offline visible sin bloquear los registros locales.
 - Comprobación de actualización del Service Worker al abrir/volver a la app; una versión nueva se ofrece sin forzar una recarga durante el entrenamiento.
-- Error Boundary de recuperación: ante un fallo de render evita una pantalla blanca y permite exportar el estado local antes de recargar.
+- Error Boundary de recuperación para exportar el estado local antes de recargar ante un fallo de render.
 - Gradientes dinámicos, glassmorphism y microinteracciones con soporte para `prefers-reduced-motion`.
 
 ## Arquitectura
@@ -44,11 +46,11 @@ Motor local-first de entrenamiento y nutrición orientativa para adultos sanos, 
 - Vite 8
 - Vitest 5
 - Sin backend ni cuentas en esta etapa.
-- Estado persistente en `localStorage` (`fitness-motor-v3`) con **schema 4** y migración compatible.
-- `AppV42.jsx`: experiencia principal.
+- Estado persistente en `localStorage` (`fitness-motor-v3`) con **schema 5** y migración compatible.
+- `AppV44.jsx`: experiencia principal y ciclo de sesión inmutable.
 - `progression.js`: progresión por objetivo.
 - `programFatigue.js`: detección de fatiga objetiva sistémica y ajuste conservador.
-- `session.js`: sesión activa, progreso, duración y cierre.
+- `session.js`: snapshot, sesión activa, progreso, duración, cierre y abandono limpio.
 - `substitution.js`: sustituciones persistentes compatibles con la estructura del plan.
 - `RuntimeGuard.jsx`: conectividad y ciclo de actualización PWA.
 - `AppErrorBoundary.jsx`: recuperación ante errores de render.
@@ -79,7 +81,7 @@ npm run build
 npm run check
 ```
 
-CI ejecuta pruebas unitarias, build de producción, **smoke test HTTP** del sitio compilado (shell, manifest y service worker) y auditoría de dependencias runtime en cada PR a `main`. Los runs redundantes de la misma rama se cancelan para no validar commits obsoletos.
+CI ejecuta pruebas unitarias, build de producción, **smoke test HTTP** del sitio compilado (shell, manifest y service worker) y auditoría de dependencias runtime en cada PR a `main`.
 
 ## Evidencia y benchmark
 

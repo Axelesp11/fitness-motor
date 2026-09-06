@@ -1,5 +1,5 @@
 export const STORAGE_KEY = "fitness-motor-v3";
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const DEFAULT_PROFILE = {
   peso: 75,
@@ -179,6 +179,7 @@ function sanitizeCompletion(item) {
     completedExercises,
     plannedExercises,
     completionPct: clampNumber(item.completionPct, 0, 100, derivedPct),
+    objective: ["hipertrofia", "fuerza", "pr", "potencia", "resistencia", "perdida"].includes(item.objective) ? item.objective : null,
   };
 }
 
@@ -192,6 +193,54 @@ function sanitizeActiveWorkout(item) {
     plannedExerciseIds: Array.isArray(item.plannedExerciseIds)
       ? [...new Set(item.plannedExerciseIds.map((value) => String(value)).filter(Boolean))].slice(0, 30)
       : [],
+    sessionSnapshot: sanitizeSessionSnapshot(item.sessionSnapshot),
+    planContext: sanitizePlanContext(item.planContext),
+  };
+}
+
+function sanitizeSessionSnapshot(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.exercises)) return null;
+  const exercises = snapshot.exercises.map(sanitizeSnapshotExercise).filter(Boolean).slice(0, 30);
+  if (!exercises.length) return null;
+  return {
+    label: String(snapshot.label || "Sesión"),
+    template: String(snapshot.template || "session"),
+    exercises,
+  };
+}
+
+function sanitizeSnapshotExercise(item) {
+  if (!item?.id || !item?.prescription) return null;
+  const min = Math.max(1, Math.round(finiteNumber(item.prescription.min, 1)));
+  const max = Math.max(min, Math.round(finiteNumber(item.prescription.max, min)));
+  return {
+    id: String(item.id),
+    name: String(item.name || item.id),
+    group: String(item.group || "Otro"),
+    type: item.type === "isolation" ? "isolation" : "compound",
+    loadType: String(item.loadType || "external"),
+    increment: Math.max(0.1, finiteNumber(item.increment, 1)),
+    secondary: Array.isArray(item.secondary) ? item.secondary.map(String).slice(0, 8) : [],
+    prRole: ["primary", "secondary"].includes(item.prRole) ? item.prRole : null,
+    substitutionSourceId: item.substitutionSourceId ? String(item.substitutionSourceId) : null,
+    prescription: {
+      sets: clampNumber(Math.round(finiteNumber(item.prescription.sets, 1)), 1, 8, 1),
+      min,
+      max,
+      rir: clampNumber(Math.round(finiteNumber(item.prescription.rir, 2)), 0, 8, 2),
+      rest: clampNumber(Math.round(finiteNumber(item.prescription.rest, 90)), 0, 900, 90),
+      intent: String(item.prescription.intent || "Técnica consistente"),
+    },
+  };
+}
+
+function sanitizePlanContext(value) {
+  if (!value || typeof value !== "object") return { objective: null, week: null, targetRir: null, fatigueStatus: null };
+  return {
+    objective: ["hipertrofia", "fuerza", "pr", "potencia", "resistencia", "perdida"].includes(value.objective) ? value.objective : null,
+    week: Number.isFinite(Number(value.week)) ? clampNumber(value.week, 1, 6, null) : null,
+    targetRir: value.targetRir != null ? String(value.targetRir).slice(0, 20) : null,
+    fatigueStatus: value.fatigueStatus ? String(value.fatigueStatus).slice(0, 40) : null,
   };
 }
 
