@@ -84,6 +84,15 @@ describe("workout snapshot", () => {
     expect(active.planContext.week).toBe(3);
   });
 
+  it("normaliza el label del snapshot al identificador lógico de la sesión activa", () => {
+    const active = createWorkoutSession(session, 0, () => "workout-1", new Date("2026-09-05T10:00:00Z"));
+    active.sessionSnapshot.label = "Label alterado";
+    const resolved = sessionForWorkout(active, session);
+    expect(resolved.label).toBe(session.label);
+    const progress = sessionProgress(resolved, [log("squat", "2026-09-05T10:05:00Z", "workout-1")], [], active);
+    expect(progress.completed).toBe(1);
+  });
+
   it("el abandono elimina solo logs de la sesión activa", () => {
     const active = createWorkoutSession(session, 0, () => "workout-1", new Date("2026-09-05T10:00:00Z"));
     const logs = [
