@@ -2,7 +2,7 @@ import { calculateWeeklyVolume } from "./engine.js";
 
 export function substitutionKey(session, exerciseItem) {
   const sourceId = exerciseItem?.substitutionSourceId || exerciseItem?.id || "exercise";
-  return `${session?.template || session?.label || "session"}:${sourceId}`;
+  return `${session?.label || session?.template || "session"}:${sourceId}`;
 }
 
 function flattenExercises(plan) {
