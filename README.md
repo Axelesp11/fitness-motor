@@ -1,39 +1,39 @@
-# Motor Fitness 4.1
+# Motor Fitness 4.2
 
 Motor local-first de entrenamiento y nutrición orientativa para adultos sanos, diseñado primero para móvil/PWA.
 
 ## Qué hace
 
 - Calcula BMR, gasto energético inicial, calorías objetivo y macros.
-- Separa actividad diaria del coste estimado del entrenamiento.
 - Con suficientes check-ins de peso + calorías, pasa gradualmente a un gasto **adaptativo**.
 - Separa **objetivo fisiológico** de **split semanal**.
-- Programa modos específicos para hipertrofia, fuerza, PR/pico de fuerza, potencia, resistencia muscular y pérdida de grasa.
+- Programa hipertrofia, fuerza, PR/pico de fuerza, potencia, resistencia muscular y pérdida de grasa.
 - Distribuye el trabajo como Full Body, Upper/Lower, PPL + Upper/Lower o PPL ×2 según frecuencia.
-- En modo PR permite elegir press banca, sentadilla, peso muerto o press militar y busca dos exposiciones semanales compatibles.
-- Ajusta ejercicios por equipo, tiempo, objetivo y grupo prioritario.
+- En modo PR permite elegir press banca, sentadilla, peso muerto o press militar con exposición principal y técnica.
 - Trabaja con series reales: carga, repeticiones y RIR por set.
-- Usa **progresión específica por objetivo**, no una regla única para todos los modos.
-- Analiza varias exposiciones antes de considerar una regresión y evita descargar por una sola sesión mala.
-- Separa el PR principal de la exposición técnica secundaria.
-- En potencia prioriza calidad/intención explosiva antes de añadir carga.
-- En pérdida de grasa prioriza conservar rendimiento durante el déficit.
+- Usa **progresión específica por objetivo**, no una regla única.
+- Analiza varias exposiciones antes de declarar regresión.
+- Combina recuperación subjetiva con **fatiga objetiva a nivel de programa**: solo recorta volumen si varias regresiones repetidas apuntan a una caída sistémica.
 - Estima e1RM y detecta récords de fuerza/volumen.
 - Sugiere calentamientos para movimientos con carga externa.
 - Incluye temporizador de 1 a 5 minutos con progreso visual.
-- Ajusta volumen por recuperación diaria.
 - Lleva un mesociclo automático de seis semanas con descarga.
 - Calcula volumen semanal equivalente por grupo muscular.
-- Sigue el progreso real de la sesión por ejercicios registrados y no permite finalizar una sesión vacía.
+- Permite **sustituir ejercicios** por alternativas del mismo grupo y tipo cuando el plan dispone de variantes compatibles.
+- Conserva las sustituciones hasta restablecerlas.
+- Modela una sesión real con `sessionId`, inicio, duración, porcentaje completado y conteo de ejercicios.
+- Exige al menos 50% de los ejercicios planificados para cerrar una sesión y evita cierres vacíos.
 - Guarda todo en el navegador y permite exportar/importar un respaldo JSON.
 
-## UIX 4.1
+## UIX 4.2
 
 - React + Motion for React.
 - Interfaz training-first: sesión actual, progresión y recuperación antes que configuración.
 - Dock inferior para navegación rápida en PWA.
 - Paletas visuales, intensidad de movimiento y hápticos configurables.
-- Configuración del **motor de entrenamiento** en un sheet independiente de los ajustes visuales.
+- Configuración del motor en sheet independiente de los ajustes visuales.
+- RIR mostrado desde la **prescripción real** del plan, no desde una etiqueta genérica del mesociclo.
+- Historial de sesiones con duración y porcentaje de cumplimiento.
 - Gradientes dinámicos, glassmorphism y microinteracciones con soporte para `prefers-reduced-motion`.
 
 ## Arquitectura
@@ -43,10 +43,12 @@ Motor local-first de entrenamiento y nutrición orientativa para adultos sanos, 
 - Vite 8
 - Vitest 5
 - Sin backend ni cuentas en esta etapa.
-- Estado persistente versionado en `localStorage` (`fitness-motor-v3`).
-- `AppV4.jsx`: experiencia principal de entrenamiento.
-- `progression.js`: progresión/autoregulación por objetivo.
-- `session.js`: ventana y progreso de sesión.
+- Estado persistente en `localStorage` (`fitness-motor-v3`) con **schema 4** y migración compatible.
+- `AppV42.jsx`: experiencia principal.
+- `progression.js`: progresión por objetivo.
+- `programFatigue.js`: detección de fatiga objetiva sistémica y ajuste conservador.
+- `session.js`: sesión activa, progreso, duración y cierre.
+- `substitution.js`: sustituciones persistentes compatibles con la estructura del plan.
 - `programming.js`: prescripción fisiológica y splits.
 - `engine.js`: cálculos base, biblioteca, nutrición y métricas.
 
@@ -77,4 +79,4 @@ CI ejecuta pruebas unitarias, build de producción y auditoría de dependencias 
 
 ## Alcance y seguridad
 
-Las calorías, el gasto y el e1RM son estimaciones. El motor no sustituye valoración médica, nutricional ni de rehabilitación. Está calibrado para adultos sanos; dolor agudo, lesión, mareo, dolor torácico o síntomas inusuales deben prevalecer sobre cualquier recomendación automática. El modo PR prepara trabajo específico submáximo, pero no auto-prescribe un intento máximo.
+Las calorías, el gasto y el e1RM son estimaciones. El motor no sustituye valoración médica, nutricional ni de rehabilitación. Dolor agudo, lesión, mareo, dolor torácico o síntomas inusuales deben prevalecer sobre cualquier recomendación automática. El modo PR prepara trabajo específico submáximo, pero no auto-prescribe un intento máximo.
