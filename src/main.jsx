@@ -1,12 +1,12 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App.jsx";
+import AppV4 from "./AppV4.jsx";
 import PwaShell from "./PwaShell.jsx";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <PwaShell>
-      <App />
+      <AppV4 />
     </PwaShell>
   </StrictMode>,
 );
