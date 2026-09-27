@@ -156,11 +156,13 @@ function sanitizeExerciseLog(log) {
 function sanitizeBodyLog(log) {
   if (!log || !validDate(log.date) || !Number.isFinite(Number(log.weight))) return null;
   const calories = Number(log.calories);
+  const sleepHours = log.sleepHours === "" || log.sleepHours == null ? null : Number(log.sleepHours);
   return {
     id: String(log.id || cryptoSafeId()),
     date: log.date,
     weight: clampNumber(log.weight, 25, 350, 75),
     calories: Number.isFinite(calories) && calories > 0 ? Math.round(calories) : null,
+    sleepHours: sleepHours != null && Number.isFinite(sleepHours) && sleepHours >= 0 && sleepHours <= 24 ? Math.round(sleepHours * 10) / 10 : null,
   };
 }
 

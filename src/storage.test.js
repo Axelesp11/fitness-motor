@@ -86,6 +86,12 @@ describe("storage schema", () => {
     expect(parsed.schemaVersion).toBe(5);
   });
 
+  it("conserva sueño y calorías al importar un registro diario", () => {
+    const state = parseImportedState(JSON.stringify({ bodyLogs: [{ date: "2026-09-26", weight: 98, calories: 2450, sleepHours: 7.5 }] }));
+    expect(state.bodyLogs[0]).toMatchObject({ calories: 2450, sleepHours: 7.5 });
+    expect(sanitizeState({ bodyLogs: [{ date: "2026-09-26", weight: 98, sleepHours: 27 }] }).bodyLogs[0].sleepHours).toBeNull();
+  });
+
   it("rejects malformed JSON", () => {
     expect(() => parseImportedState("not-json")).toThrow();
   });

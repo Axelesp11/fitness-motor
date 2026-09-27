@@ -129,12 +129,9 @@ export default function PwaShell({ children }) {
     return () => observer.disconnect();
   }, [prefs.haptics]);
 
-  const goTo = (selector) => {
+  const navigate = (view) => {
     buzz(9);
-    document.querySelector(selector)?.scrollIntoView({
-      behavior: motionOff ? "auto" : "smooth",
-      block: "start",
-    });
+    window.dispatchEvent(new CustomEvent("fitness:navigate", { detail: view }));
   };
 
   const install = async () => {
@@ -195,10 +192,10 @@ export default function PwaShell({ children }) {
           animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
           transition={{ ...spring, delay: .08 }}
         >
-          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => goTo(".header")}><Icon name="home"/><span>Inicio</span></motion.button>
-          <motion.button className="ux-dock-main" type="button" whileTap={{ scale: .9 }} onClick={() => goTo(".routine-card")}><Icon name="bolt"/><span>Entreno</span></motion.button>
-          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => goTo(".history")}><Icon name="chart"/><span>Progreso</span></motion.button>
-          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => { buzz(9); setSettingsOpen(true); }}><Icon name="gear"/><span>Ajustes</span></motion.button>
+          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => navigate("hoy")}><Icon name="home"/><span>Hoy</span></motion.button>
+          <motion.button className="ux-dock-main" type="button" whileTap={{ scale: .9 }} onClick={() => navigate("entrenar")}><Icon name="bolt"/><span>Entrenar</span></motion.button>
+          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => navigate("progreso")}><Icon name="chart"/><span>Progreso</span></motion.button>
+          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => navigate("habitos")}><Icon name="gear"/><span>Hábitos</span></motion.button>
         </motion.nav>
 
         <AnimatePresence>

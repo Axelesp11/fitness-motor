@@ -43,6 +43,10 @@ function localDate() {
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
 
+const VIEWS = [
+  ["hoy", "Hoy"], ["entrenar", "Entrenar"], ["progreso", "Progreso"], ["habitos", "Hábitos"],
+];
+
 function sessionRirLabel(session, fallback = "2") {
   const values = (session?.exercises ?? []).map((item) => Number(item.prescription?.rir)).filter(Number.isFinite);
   if (!values.length) return String(fallback);
@@ -117,8 +121,10 @@ function SettingsSheet({ open, onClose, state, updateProfile, exportData, import
 export default function AppV44() {
   const [state, setState] = useState(() => loadState());
   const [activeDay, setActiveDay] = useState(() => state.activeWorkout?.sessionIndex ?? 0);
+  const [view, setView] = useState("hoy");
+  const [selectedExercise, setSelectedExercise] = useState("");
   const [drafts, setDrafts] = useState({});
-  const [bodyDraft, setBodyDraft] = useState({ date: localDate(), weight: state.profile.peso, calories: "" });
+  const [bodyDraft, setBodyDraft] = useState({ date: localDate(), weight: state.profile.peso, calories: "", sleepHours: "" });
   const [notice, setNotice] = useState("");
   const [timer, setTimer] = useState({ remaining: 0, total: 0, running: false });
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -140,8 +146,30 @@ export default function AppV44() {
   const historicalLogs = useMemo(() => activeWorkout ? exerciseLogs.filter((log) => log.sessionId !== activeWorkout.id) : exerciseLogs, [exerciseLogs, activeWorkout]);
   const currentRir = activeWorkout?.planContext?.targetRir || sessionRirLabel(session, plan.programming?.targetRir);
   const currentFatigue = activeWorkout?.planContext?.fatigueStatus || performanceFatigue.label;
+  const exerciseNames = useMemo(() => [...new Map([...exerciseLogs].reverse().map((log) => [log.exerciseId, log.exerciseName])).entries()], [exerciseLogs]);
+  const progressExercise = selectedExercise && exerciseNames.some(([id]) => id === selectedExercise) ? selectedExercise : exerciseNames[0]?.[0];
+  const progressHistory = useMemo(() => exerciseLogs.filter((log) => log.exerciseId === progressExercise).slice(-12).map((log) => ({
+    id: log.id,
+    date: new Date(log.createdAt).toLocaleDateString("es-MX", { day: "numeric", month: "short" }),
+    value: summarizeExerciseLog(log).bestE1RM,
+    reps: summarizeExerciseLog(log).avgReps,
+    sets: log.sets.length,
+  })), [exerciseLogs, progressExercise]);
+  const usableProgress = progressHistory.filter((item) => item.value != null);
+  const recentHabits = [...bodyLogs].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 14);
+  const averageOf = (key) => {
+    const values = recentHabits.map((item) => item[key]).filter((value) => Number.isFinite(value) && value > 0);
+    return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * (key === "sleepHours" ? 10 : 1)) / (key === "sleepHours" ? 10 : 1) : null;
+  };
+  const averageSleep = averageOf("sleepHours");
+  const averageCalories = averageOf("calories");
 
   useEffect(() => saveState(state), [state]);
+  useEffect(() => {
+    const navigate = (event) => { if (VIEWS.some(([id]) => id === event.detail)) { setView(event.detail); window.scrollTo({ top: 0, behavior: "smooth" }); } };
+    window.addEventListener("fitness:navigate", navigate);
+    return () => window.removeEventListener("fitness:navigate", navigate);
+  }, []);
   useEffect(() => { if (!activeWorkout && activeDay >= plan.sessions.length) setActiveDay(0); }, [activeDay, activeWorkout, plan.sessions.length]);
   useEffect(() => {
     const open = () => setSettingsOpen(true);
@@ -204,6 +232,7 @@ export default function AppV44() {
   const stopRest = () => setTimer({ remaining: 0, total: 0, running: false });
 
   const startWorkout = () => {
+    setView("entrenar");
     if (activeWorkout) {
       if (activeWorkout.sessionLabel !== session.label) setNotice(`Ya hay una sesión activa: ${activeWorkout.sessionLabel}.`);
       document.querySelector(".routine-card")?.scrollIntoView({ behavior: "smooth" });
@@ -226,6 +255,7 @@ export default function AppV44() {
       return;
     }
     setActiveDay(index);
+    setView("entrenar");
   };
 
   const saveExercise = (exerciseItem) => {
@@ -290,6 +320,7 @@ export default function AppV44() {
     setDrafts({});
     stopRest();
     setActiveDay((value) => (value + 1) % plan.sessions.length);
+    setView("progreso");
     setNotice(`Sesión terminada · ${current.percent}% · ${formatDuration(completion.durationSec)}.`);
   };
 
@@ -330,17 +361,22 @@ export default function AppV44() {
   const saveBodyCheckin = () => {
     const weight = Number(bodyDraft.weight);
     const calories = Number(bodyDraft.calories);
+    const sleepHours = bodyDraft.sleepHours === "" ? null : Number(bodyDraft.sleepHours);
     if (!bodyDraft.date || !Number.isFinite(weight) || weight <= 0) {
       setNotice("Revisa la fecha y el peso del check-in.");
       return;
     }
-    const entry = { id: uid(), date: bodyDraft.date, weight, calories: Number.isFinite(calories) && calories > 0 ? Math.round(calories) : null };
+    if (sleepHours != null && (!Number.isFinite(sleepHours) || sleepHours < 0 || sleepHours > 24)) {
+      setNotice("Revisa las horas de sueño: deben estar entre 0 y 24.");
+      return;
+    }
+    const entry = { id: uid(), date: bodyDraft.date, weight, calories: Number.isFinite(calories) && calories > 0 ? Math.round(calories) : null, sleepHours };
     setState((current) => ({
       ...current,
       profile: { ...current.profile, peso: weight },
       bodyLogs: [...current.bodyLogs.filter((item) => item.date !== entry.date), entry].sort((a, b) => a.date.localeCompare(b.date)).slice(-365),
     }));
-    setNotice(activeWorkout ? "Check-in guardado. La sesión activa no cambió." : "Check-in corporal guardado.");
+    setNotice(activeWorkout ? "Día guardado. La sesión activa no cambió." : "Día guardado correctamente.");
   };
 
   const exportData = () => {
@@ -365,7 +401,7 @@ export default function AppV44() {
       const imported = parseImportedState(await file.text());
       setState(imported);
       setActiveDay(imported.activeWorkout?.sessionIndex ?? 0);
-      setBodyDraft({ date: localDate(), weight: imported.profile.peso, calories: "" });
+      setBodyDraft({ date: localDate(), weight: imported.profile.peso, calories: "", sleepHours: "" });
       setNotice("Respaldo importado correctamente.");
     } catch (error) {
       setNotice(error.message || "No se pudo importar el respaldo.");
@@ -378,8 +414,11 @@ export default function AppV44() {
   const trendText = nutrition.trend.weeklyChangePct == null ? "Sin tendencia suficiente" : `${nutrition.trend.weeklyChangeKg > 0 ? "+" : ""}${nutrition.trend.weeklyChangeKg} kg/sem`;
 
   return (
-    <main className={`app-shell app-v4 goal-${profile.objetivo}`}>
+    <main className={`app-shell app-v4 goal-${profile.objetivo} view-${view}`}>
       <div className="container">
+        <nav className="motor-view-nav" aria-label="Secciones de Fitness Motor">{VIEWS.map(([id, label]) => <button key={id} type="button" aria-current={view === id ? "page" : undefined} onClick={() => setView(id)}>{label}</button>)}<button type="button" className="motor-nav-settings" onClick={() => setSettingsOpen(true)}>Ajustes</button></nav>
+        {(view === "progreso" || view === "habitos") && <button className="mobile-settings" type="button" onClick={() => setSettingsOpen(true)}>Configurar entrenamiento</button>}
+        {(view === "hoy" || view === "entrenar") && <>
         <header className="header v4-hero">
           <div className="v4-hero-copy">
             <div className="hero-topline"><p className="eyebrow">MOTOR FITNESS 4.4</p><button className="appearance-trigger" type="button" onClick={() => window.dispatchEvent(new Event("fitness:open-appearance"))} aria-label="Personalizar colores y animaciones"><span className="appearance-orbit" aria-hidden="true" />Personalizar diseño</button></div>
@@ -391,11 +430,13 @@ export default function AppV44() {
               <motion.button className="secondary-btn settings-launch" type="button" whileTap={{ scale: .96 }} onClick={() => setSettingsOpen(true)}>Configurar motor</motion.button>
             </div>
           </div>
-          <RestTimer timer={timer} onStart={startRest} onStop={stopRest} />
+          {view === "entrenar" ? <RestTimer timer={timer} onStart={startRest} onStop={stopRest} /> : null}
         </header>
+        </>}
 
         {notice ? <div className="toast" role="status">{notice}</div> : null}
 
+        {view === "hoy" && <>
         <section className="card session-overview">
           <div className="section-heading"><h2 className="section-title">SESIÓN ACTUAL</h2><span>{progress.completed}/{progress.planned} ejercicios</span></div>
           <div className="session-progress-track"><motion.i animate={{ width: `${progress.percent}%` }} transition={{ type: "spring", stiffness: 260, damping: 30 }} /></div>
@@ -405,7 +446,11 @@ export default function AppV44() {
             <div><span>Fatiga al inicio</span><strong>{currentFatigue}</strong></div>
           </div>
         </section>
+        <section className="card day-picker"><div className="section-heading"><h2 className="section-title">ELIGE TU DÍA</h2><span>{plan.sessions.length} entrenamientos</span></div><div className="day-picker-grid">{plan.sessions.map((item, index) => <button key={`${item.label}-${index}`} type="button" className={index === activeDay ? "selected" : ""} aria-pressed={index === activeDay} onClick={() => changeDay(index)}><span>DÍA {String(index + 1).padStart(2, "0")}</span><strong>{item.label.replace(/^Día \d+ · /, "")}</strong><small>{item.exercises.length} ejercicios · {profile.duracion} min</small></button>)}</div></section>
+        <div className="home-summary"><button type="button" className="card summary-action" onClick={() => setView("progreso")}><span>MI PROGRESO</span><strong>{sessionCompletions.length} sesiones terminadas</strong><small>Ver historial y evolución ↗</small></button><button type="button" className="card summary-action" onClick={() => setView("habitos")}><span>DESCANSO Y COMIDA</span><strong>{averageSleep != null ? `${averageSleep} h de sueño` : "Registra tu descanso"}</strong><small>{averageCalories != null ? `${averageCalories} kcal/día registradas` : "Añade tus calorías diarias"} ↗</small></button></div>
+        </>}
 
+        {view === "entrenar" && <>
         <div className="v4-main-grid">
           <section className="stack">
             <section className="card routine-card">
@@ -452,19 +497,30 @@ export default function AppV44() {
           </section>
 
           <aside className="v4-side-stack">
-            <section className="card nutrition-card"><div className="section-heading"><h2 className="section-title">COMBUSTIBLE</h2><span>{expenditureLabel}</span></div><div className="metrics compact-metrics"><div className="metric"><div className="metric-label">GASTO</div><div className="metric-value">{nutrition.expenditure.expenditure}</div><div className="metric-unit">kcal/día</div></div><div className="metric metric-accent"><div className="metric-label">META</div><div className="metric-value">{nutrition.target}</div><div className="metric-unit">kcal/día</div></div></div><div className="macro-row compact-macros"><div className="macro"><span>PROTEÍNA</span><strong>{nutrition.macros.protein} g</strong></div><div className="macro"><span>CARBOS</span><strong>{nutrition.macros.carbs} g</strong></div><div className="macro"><span>GRASAS</span><strong>{nutrition.macros.fat} g</strong></div></div></section>
-            <section className="card body-card"><div className="section-heading"><h2 className="section-title">CHECK-IN</h2><span>{trendText}</span></div><div className="body-checkin compact-checkin"><Field label="FECHA"><input className="control" type="date" value={bodyDraft.date} onChange={(event) => setBodyDraft((current) => ({ ...current, date: event.target.value }))} /></Field><Field label="PESO"><input className="control" type="number" step="0.1" value={bodyDraft.weight} onChange={(event) => setBodyDraft((current) => ({ ...current, weight: event.target.value }))} /></Field><Field label="CALORÍAS REALES" hint="Opcional"><input className="control" type="number" min="0" placeholder="Ej. 2400" value={bodyDraft.calories} onChange={(event) => setBodyDraft((current) => ({ ...current, calories: event.target.value }))} /></Field></div><button className="primary-btn full-btn" type="button" onClick={saveBodyCheckin}>Guardar check-in</button></section>
+            <section className="card day-guide"><div className="section-heading"><h2 className="section-title">CAMBIAR DÍA</h2></div><div className="day-guide-list">{plan.sessions.map((item, index) => <button key={`${item.label}-${index}`} className={index === activeDay ? "selected" : ""} type="button" aria-pressed={index === activeDay} onClick={() => changeDay(index)}>{index + 1}. {item.label.replace(/^Día \d+ · /, "")}</button>)}</div></section>
             <details className="card program-details"><summary><span>PROGRAMACIÓN SIGUIENTE</span><strong>{plan.programming.title}</strong></summary><p className="body-copy">{plan.programming.summary}</p><div className="program-mini-grid"><div><span>Principales</span><strong>{plan.programming.primaryRange}</strong></div><div><span>Accesorios</span><strong>{plan.programming.accessoryRange}</strong></div><div><span>Descanso</span><strong>{plan.programming.rest}</strong></div></div><p className="body-copy"><strong>Split:</strong> {plan.programming.splitNote}</p>{plan.programming.warning ? <div className="empty compact">{plan.programming.warning}</div> : null}</details>
-            <section className="card volume-card"><div className="section-heading"><h2 className="section-title">VOLUMEN SEMANAL</h2><span>próxima prescripción</span></div><div className="volume-grid">{Object.entries(plan.weeklyVolume).filter(([, value]) => value > 0).map(([muscle, value]) => <div className="volume-chip" key={muscle}><span>{muscle}</span><strong>{value}</strong></div>)}</div></section>
           </aside>
         </div>
 
+        </>}
+
+        {view === "habitos" && <div className="habits-layout"><div className="habits-intro"><p className="eyebrow">HÁBITOS</p><h1>Sueño, comida y peso</h1><p>Registra datos diarios para entender mejor el contexto de tus entrenamientos.</p></div><div className="v4-side-stack">
+            <section className="card nutrition-card"><div className="section-heading"><h2 className="section-title">COMBUSTIBLE</h2><span>{expenditureLabel}</span></div><div className="metrics compact-metrics"><div className="metric"><div className="metric-label">GASTO</div><div className="metric-value">{nutrition.expenditure.expenditure}</div><div className="metric-unit">kcal/día</div></div><div className="metric metric-accent"><div className="metric-label">META</div><div className="metric-value">{nutrition.target}</div><div className="metric-unit">kcal/día</div></div></div><div className="macro-row compact-macros"><div className="macro"><span>PROTEÍNA</span><strong>{nutrition.macros.protein} g</strong></div><div className="macro"><span>CARBOS</span><strong>{nutrition.macros.carbs} g</strong></div><div className="macro"><span>GRASAS</span><strong>{nutrition.macros.fat} g</strong></div></div></section>
+            <section className="card body-card"><div className="section-heading"><h2 className="section-title">REGISTRO DEL DÍA</h2><span>{trendText}</span></div><div className="body-checkin compact-checkin"><Field label="FECHA"><input className="control" type="date" value={bodyDraft.date} onChange={(event) => setBodyDraft((current) => ({ ...current, date: event.target.value }))} /></Field><Field label="PESO ACTUAL (KG)"><input className="control" type="number" step="0.1" value={bodyDraft.weight} onChange={(event) => setBodyDraft((current) => ({ ...current, weight: event.target.value }))} /></Field><Field label="HORAS DE SUEÑO" hint="Opcional · de anoche"><input className="control" type="number" min="0" max="24" step="0.5" placeholder="Ej. 7.5" value={bodyDraft.sleepHours} onChange={(event) => setBodyDraft((current) => ({ ...current, sleepHours: event.target.value }))} /></Field><Field label="CALORÍAS CONSUMIDAS" hint="Opcional"><input className="control" type="number" min="0" placeholder="Ej. 2400" value={bodyDraft.calories} onChange={(event) => setBodyDraft((current) => ({ ...current, calories: event.target.value }))} /></Field></div><button className="primary-btn full-btn" type="button" onClick={saveBodyCheckin}>Guardar día</button></section>
+            <section className="card volume-card"><div className="section-heading"><h2 className="section-title">VOLUMEN SEMANAL</h2><span>próxima prescripción</span></div><div className="volume-grid">{Object.entries(plan.weeklyVolume).filter(([, value]) => value > 0).map(([muscle, value]) => <div className="volume-chip" key={muscle}><span>{muscle}</span><strong>{value}</strong></div>)}</div></section>
+          </div><div className="habits-results"><div className="habit-stats"><div className="card"><span>SUEÑO PROMEDIO</span><strong>{averageSleep != null ? `${averageSleep} h` : "Sin datos"}</strong></div><div className="card"><span>CALORÍAS PROMEDIO</span><strong>{averageCalories != null ? `${averageCalories} kcal` : "Sin datos"}</strong></div><div className="card"><span>DÍAS REGISTRADOS</span><strong>{bodyLogs.length}</strong></div></div><section className="card"><div className="section-heading"><h2 className="section-title">DÍAS REGISTRADOS</h2></div>{recentHabits.length ? recentHabits.map((item) => <div className="history-row" key={item.id}><div><strong>{item.date}</strong><span>{item.weight} kg · {item.sleepHours != null ? `${item.sleepHours} h de sueño` : "Sueño sin registrar"}</span></div><div className="history-stats"><b>{item.calories != null ? `${item.calories} kcal` : "Sin calorías"}</b></div></div>) : <div className="empty">Guarda tu primer día para ver aquí sueño, comida y peso.</div>}</section><p className="habits-note">Estos datos ayudan a interpretar tu rendimiento. No calculan cuántos kilos de músculo ganaste ni prueban que una noche de sueño causó un cambio.</p></div></div>}
+
+        {view === "progreso" && <div className="progress-page">
+          <div className="habits-intro"><p className="eyebrow">PROGRESO</p><h1>Tu entrenamiento en números</h1><p>Series, cargas y sesiones que realmente registraste.</p></div>
+          <div className="progress-highlights"><div className="card"><span>SESIONES TERMINADAS</span><strong>{sessionCompletions.length}</strong></div><div className="card"><span>EJERCICIOS REGISTRADOS</span><strong>{exerciseLogs.length}</strong></div><div className="card"><span>PESO ACTUAL</span><strong>{bodyLogs.length ? `${bodyLogs.at(-1).weight} kg` : "Sin registro"}</strong></div></div>
+          <section className="card progress-chart"><div className="section-heading"><h2 className="section-title">EVOLUCIÓN POR EJERCICIO</h2><span>Últimos 12 registros</span></div>{exerciseNames.length ? <><label htmlFor="progress-exercise">Elige un ejercicio</label><select id="progress-exercise" className="control" value={progressExercise} onChange={(event) => setSelectedExercise(event.target.value)}>{exerciseNames.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><div className="progress-bars" aria-label="Evolución de fuerza estimada">{progressHistory.map((item) => <div key={item.id} className="progress-bar-item"><div className="progress-bar-track"><i style={{ height: `${item.value != null && usableProgress.length ? Math.max(12, Math.round(item.value / Math.max(...usableProgress.map((entry) => entry.value)) * 100)) : 12}%` }} /></div><strong>{item.value != null ? `${item.value} kg` : `${item.reps} reps`}</strong><span>{item.date}</span></div>)}</div><p className="habits-note">e1RM estima fuerza a partir de tus series; no mide masa muscular.</p></> : <div className="empty">Guarda series durante una sesión para ver aquí tus cargas y repeticiones.</div>}</section>
+        <section className="card context-card"><div className="section-heading"><h2 className="section-title">ENTRENA Y RECUPÉRATE</h2></div><p>Últimos {recentHabits.length} días registrados: {averageSleep != null ? `${averageSleep} h de sueño en promedio` : "faltan horas de sueño"} · {averageCalories != null ? `${averageCalories} kcal consumidas en promedio` : "faltan calorías consumidas"}.</p><p>{usableProgress.length >= 2 ? `En ${exerciseNames.find(([id]) => id === progressExercise)?.[1]}, tu fuerza estimada pasó de ${usableProgress[0].value} a ${usableProgress.at(-1).value} kg entre los registros mostrados.` : "Registra varias sesiones del mismo ejercicio para comparar tu rendimiento."}</p><p className="habits-note">Es una comparación de tus registros, no una medición de músculo ganado ni una relación causal con el sueño o la comida.</p><button className="secondary-btn" type="button" onClick={() => setView("habitos")}>Registrar sueño y comida</button></section>
         <section className="card history history-card">
           <div className="section-heading"><h2 className="section-title">SESIONES RECIENTES</h2><span>{sessionCompletions.length} cerradas</span></div>
-          {sessionCompletions.length ? <div className="history-v4-list">{[...sessionCompletions].reverse().slice(0, 8).map((item) => <div className="history-row" key={item.id}><div><strong>{item.sessionLabel}</strong><span>{item.startedAt ? new Date(item.startedAt).toLocaleString() : new Date(item.createdAt).toLocaleString()}</span></div><div className="history-stats"><b>{item.plannedExercises ? `${item.completionPct}%` : "Histórico"}</b><span>{item.durationSec ? formatDuration(item.durationSec) : "Sin duración registrada"}</span></div></div>)}</div> : <div className="empty">Finaliza tu primera sesión para construir historial real de duración y cumplimiento.</div>}
+          {sessionCompletions.length ? <div className="history-v4-list">{[...sessionCompletions].reverse().map((item) => <div className="history-row" key={item.id}><div><strong>{item.sessionLabel}</strong><span>{item.startedAt ? new Date(item.startedAt).toLocaleString() : new Date(item.createdAt).toLocaleString()}</span></div><div className="history-stats"><b>{item.plannedExercises ? `${item.completionPct}%` : "Histórico"}</b><span>{item.durationSec ? formatDuration(item.durationSec) : "Sin duración registrada"}</span></div></div>)}</div> : <div className="empty">Finaliza tu primera sesión para construir historial real de duración y cumplimiento.</div>}
         </section>
-        <section className="card history history-card"><div className="section-heading"><h2 className="section-title">PROGRESO DE EJERCICIOS</h2><span>{exerciseLogs.length} registros</span></div>{exerciseLogs.length ? <div className="history-v4-list">{[...exerciseLogs].reverse().slice(0, 8).map((log) => { const summary = summarizeExerciseLog(log); return <div className="history-row" key={log.id}><div><strong>{log.exerciseName}</strong><span>{log.sessionLabel}</span></div><div className="history-stats"><b>{log.sets.length} series</b><span>{summary.bestE1RM ? `e1RM ${summary.bestE1RM} kg` : `${summary.avgReps} reps prom.`}</span></div></div>; })}</div> : <div className="empty">Guarda tus primeras series para activar PRs y progresión automática.</div>}</section>
-        <footer className="card footer-note v4-footer"><strong>Motor Fitness 4.4.</strong> Cada sesión queda inmutable desde que la inicias. Los cambios de recuperación, fatiga o configuración solo afectan a la siguiente.</footer>
+        <details className="card history history-card"><summary>Ver todas las series registradas ({exerciseLogs.length})</summary>{exerciseLogs.length ? <div className="history-v4-list">{[...exerciseLogs].reverse().map((log) => { const summary = summarizeExerciseLog(log); return <div className="history-row" key={log.id}><div><strong>{log.exerciseName}</strong><span>{new Date(log.createdAt).toLocaleDateString("es-MX")} · {log.sessionLabel}</span></div><div className="history-stats"><b>{log.sets.length} series</b><span>{summary.bestE1RM ? `e1RM ${summary.bestE1RM} kg` : `${summary.avgReps} reps prom.`}</span></div></div>; })}</div> : <div className="empty">Todavía no hay series registradas.</div>}</details>
+        </div>}
       </div>
       <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} state={state} updateProfile={updateProfile} exportData={exportData} importRef={importRef} importData={importData} clearSubstitutions={() => setState((current) => ({ ...current, exerciseSubstitutions: {} }))} />
     </main>
