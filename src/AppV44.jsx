@@ -25,6 +25,7 @@ import { assessProgramFatigue, applyProgramFatigue } from "./programFatigue.js";
 import { applyExerciseSubstitutions, substitutionKey, substitutionOptions } from "./substitution.js";
 import {
   completeWorkout,
+  savePartialWorkout,
   createWorkoutSession,
   discardWorkoutLogs,
   formatDuration,
@@ -33,6 +34,8 @@ import {
 } from "./session.js";
 import { loadState, parseImportedState, saveState, serializeState } from "./storage.js";
 import { trainingAchievements } from "./achievements.js";
+import { estimateExperience, learningStep, techniqueTip, TRAINING_HISTORY } from "./learning.js";
+import Welcome from "./Welcome.jsx";
 
 function uid() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -93,6 +96,8 @@ function SettingsSheet({ open, onClose, state, updateProfile, exportData, import
               {profile.objetivo === "pr" ? <Field label="LEVANTAMIENTO PR"><select className="control" disabled={Boolean(activeWorkout)} value={profile.prLift} onChange={updateProfile("prLift")}>{PR_LIFT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field> : null}
               <Field label="SPLIT / FRECUENCIA"><select className="control" disabled={Boolean(activeWorkout)} value={profile.dias} onChange={updateProfile("dias")}>{SPLIT_OPTIONS.map(([days, label]) => <option key={days} value={days}>{days} días · {label}</option>)}</select></Field>
               <Field label="EXPERIENCIA"><select className="control" disabled={Boolean(activeWorkout)} value={profile.experiencia} onChange={updateProfile("experiencia")}><option value="nunca">Principiante</option><option value="basico">Básico</option><option value="intermedio">Intermedio</option></select></Field>
+              <Field label="TIEMPO ENTRENANDO"><select className="control" disabled={Boolean(activeWorkout)} value={profile.trainingHistory} onChange={updateProfile("trainingHistory")}><option value="unknown">No especificado</option><option value="none">Apenas comienzo</option>{TRAINING_HISTORY.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+              <Field label="CÓMO QUIERES VER TU RUTINA"><select className="control" value={profile.learningMode} onChange={updateProfile("learningMode")}><option value="guided">Guiado · un ejercicio a la vez</option><option value="advanced">Avanzado · rutina completa</option></select></Field>
               <Field label="EQUIPO"><select className="control" disabled={Boolean(activeWorkout)} value={profile.equipo} onChange={updateProfile("equipo")}>{Object.entries(EQUIPMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
               <Field label="DURACIÓN"><select className="control" disabled={Boolean(activeWorkout)} value={profile.duracion} onChange={updateProfile("duracion")}>{[45,60,75,90].map((value) => <option key={value} value={value}>{value} min</option>)}</select></Field>
               <Field label="ENFOQUE"><select className="control" disabled={Boolean(activeWorkout)} value={profile.enfoque} onChange={updateProfile("enfoque")}>{FOCUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
@@ -124,6 +129,8 @@ export default function AppV44() {
   const [activeDay, setActiveDay] = useState(() => state.activeWorkout?.sessionIndex ?? 0);
   const [view, setView] = useState("hoy");
   const [selectedExercise, setSelectedExercise] = useState("");
+  const [guideIndex, setGuideIndex] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [drafts, setDrafts] = useState({});
   const [bodyDraft, setBodyDraft] = useState({ date: localDate(), weight: state.profile.peso, calories: "", sleepHours: "" });
   const [notice, setNotice] = useState("");
@@ -133,7 +140,7 @@ export default function AppV44() {
   const [abandonArmed, setAbandonArmed] = useState(false);
   const importRef = useRef(null);
 
-  const { profile, readiness, exerciseLogs, bodyLogs, sessionCompletions, activeWorkout, exerciseSubstitutions } = state;
+  const { profile, readiness, exerciseLogs, bodyLogs, sessionCompletions, partialSessions, activeWorkout, exerciseSubstitutions } = state;
   const achievements = useMemo(() => trainingAchievements({ sessionCompletions, exerciseLogs, bodyLogs }), [sessionCompletions, exerciseLogs, bodyLogs]);
   const nutrition = useMemo(() => calcNutrition(profile, bodyLogs), [profile, bodyLogs]);
   const performanceFatigue = useMemo(() => assessProgramFatigue(exerciseLogs), [exerciseLogs]);
@@ -144,7 +151,10 @@ export default function AppV44() {
   const plan = useMemo(() => applyExerciseSubstitutions(unswappedPlan, exerciseSubstitutions), [unswappedPlan, exerciseSubstitutions]);
   const plannedSession = plan.sessions[activeDay] ?? plan.sessions[0];
   const session = sessionForWorkout(activeWorkout, plannedSession);
-  const progress = useMemo(() => sessionProgress(session, exerciseLogs, sessionCompletions, activeWorkout), [session, exerciseLogs, sessionCompletions, activeWorkout]);
+  const progress = useMemo(() => {
+    const current = sessionProgress(session, exerciseLogs, sessionCompletions, activeWorkout);
+    return activeWorkout ? current : { ...current, completed: 0, percent: 0, canFinish: false };
+  }, [session, exerciseLogs, sessionCompletions, activeWorkout]);
   const historicalLogs = useMemo(() => activeWorkout ? exerciseLogs.filter((log) => log.sessionId !== activeWorkout.id) : exerciseLogs, [exerciseLogs, activeWorkout]);
   const currentRir = activeWorkout?.planContext?.targetRir || sessionRirLabel(session, plan.programming?.targetRir);
   const currentFatigue = activeWorkout?.planContext?.fatigueStatus || performanceFatigue.label;
@@ -165,6 +175,9 @@ export default function AppV44() {
   };
   const averageSleep = averageOf("sleepHours");
   const averageCalories = averageOf("calories");
+  const guided = profile.learningMode === "guided";
+  const guide = learningStep(sessionCompletions.length);
+  const currentGuideIndex = Math.min(guideIndex, Math.max(0, session.exercises.length - 1));
 
   useEffect(() => saveState(state), [state]);
   useEffect(() => {
@@ -206,14 +219,14 @@ export default function AppV44() {
   }, [abandonArmed]);
 
   const updateProfile = (key) => (event) => {
-    const lockedProgrammingKeys = ["objetivo", "prLift", "dias", "experiencia", "equipo", "duracion", "enfoque"];
+    const lockedProgrammingKeys = ["objetivo", "prLift", "dias", "experiencia", "trainingHistory", "equipo", "duracion", "enfoque"];
     if (activeWorkout && lockedProgrammingKeys.includes(key)) {
       setNotice("La sesión activa está congelada. Cambia la programación al terminar.");
       return;
     }
     const numeric = ["peso", "estatura", "edad", "dias", "duracion"].includes(key);
     const value = numeric ? Number(event.target.value) : event.target.value;
-    setState((current) => ({ ...current, profile: { ...current.profile, [key]: value } }));
+    setState((current) => ({ ...current, profile: { ...current.profile, [key]: value, ...(key === "trainingHistory" && value !== "unknown" ? { experiencia: estimateExperience(value) } : {}) } }));
   };
 
   const updateReadiness = (key) => (event) => {
@@ -257,6 +270,8 @@ export default function AppV44() {
       return;
     }
     setActiveDay(index);
+    setGuideIndex(0);
+    setHelpOpen(false);
     setView("entrenar");
   };
 
@@ -298,6 +313,10 @@ export default function AppV44() {
       exerciseLogs: [...current.exerciseLogs.filter((log) => !(log.sessionId === activeWorkout.id && log.exerciseId === exerciseItem.id)), newLog].slice(-1500),
     }));
     setDrafts((current) => ({ ...current, [draftKey]: [] }));
+    if (guided) {
+      setGuideIndex((index) => Math.min(index + 1, session.exercises.length - 1));
+      setHelpOpen(false);
+    }
     if (pr.e1rmPR) setNotice(`Nuevo PR estimado · ${exerciseItem.name}.`);
     else if (pr.volumePR) setNotice(`Récord de volumen · ${exerciseItem.name}.`);
     else setNotice(`${exerciseItem.name} guardado.`);
@@ -310,7 +329,7 @@ export default function AppV44() {
     }
     const current = sessionProgress(session, exerciseLogs, sessionCompletions, activeWorkout);
     if (!current.canFinish) {
-      setNotice(`Completa al menos ${current.minimumToFinish} de ${current.planned} ejercicios antes de finalizar.`);
+      setNotice(`Para terminar por completo faltan ejercicios. Puedes guardar lo hecho y salir cuando quieras.`);
       return;
     }
     const completion = completeWorkout(activeWorkout, current, new Date(), uid);
@@ -323,9 +342,27 @@ export default function AppV44() {
     setDrafts({});
     stopRest();
     setActiveDay((value) => (value + 1) % plan.sessions.length);
+    setGuideIndex(0);
     setView("progreso");
     const newRank = nextAchievements.tier > achievements.tier ? ` ¡Nuevo rango: ${nextAchievements.rank.name}!` : "";
     setNotice(`Sesión terminada · ${current.percent}% · ${formatDuration(completion.durationSec)}.${newRank}`);
+  };
+
+  const leaveWorkout = () => {
+    if (!activeWorkout) return;
+    if (!progress.completed) {
+      setState((current) => ({ ...current, activeWorkout: null }));
+      setNotice("Sesión cerrada. Puedes intentar otro día.");
+    } else {
+      const partial = savePartialWorkout(activeWorkout, progress, new Date(), uid);
+      setState((current) => ({ ...current, activeWorkout: null, partialSessions: [...current.partialSessions, partial].slice(-700) }));
+      setNotice("Series guardadas como sesión parcial. Puedes continuar con otro día cuando quieras.");
+    }
+    setDrafts({});
+    setGuideIndex(0);
+    setHelpOpen(false);
+    stopRest();
+    setView("progreso");
   };
 
   const abandonWorkout = () => {
@@ -405,6 +442,7 @@ export default function AppV44() {
       const imported = parseImportedState(await file.text());
       setState(imported);
       setActiveDay(imported.activeWorkout?.sessionIndex ?? 0);
+      setGuideIndex(0);
       setBodyDraft({ date: localDate(), weight: imported.profile.peso, calories: "", sleepHours: "" });
       setNotice("Respaldo importado correctamente.");
     } catch (error) {
@@ -418,15 +456,18 @@ export default function AppV44() {
   const trendText = nutrition.trend.weeklyChangePct == null ? "Sin tendencia suficiente" : `${nutrition.trend.weeklyChangeKg > 0 ? "+" : ""}${nutrition.trend.weeklyChangeKg} kg/sem`;
 
   return (
-    <main className={`app-shell app-v4 goal-${profile.objetivo} view-${view}`}>
-      <div className="container">
+    <main className={`app-shell app-v4 goal-${profile.objetivo} view-${view} ${!profile.onboardingDone && !activeWorkout ? "onboarding-active" : ""} ${guided ? "learning-guided" : "learning-advanced"}`}>
+      {!profile.onboardingDone && !activeWorkout ? <Welcome onComplete={({ history, mode }) => {
+        setState((current) => ({ ...current, profile: { ...current.profile, trainingHistory: history, experiencia: estimateExperience(history), learningMode: mode, onboardingDone: true } }));
+      }} /> : null}
+      <div className="container" inert={!profile.onboardingDone && !activeWorkout ? true : undefined}>
         <nav className="motor-view-nav" aria-label="Secciones de Fitness Motor">{VIEWS.map(([id, label]) => <button key={id} type="button" aria-current={view === id ? "page" : undefined} onClick={() => setView(id)}>{label}</button>)}<button type="button" className="motor-nav-settings" onClick={() => setSettingsOpen(true)}>Ajustes</button></nav>
         {(view === "progreso" || view === "habitos") && <button className="mobile-settings" type="button" onClick={() => setSettingsOpen(true)}>Configurar entrenamiento</button>}
         {(view === "hoy" || view === "entrenar") && <>
         <header className="header v4-hero">
           <div className="v4-hero-copy">
             <div className="hero-topline"><p className="eyebrow">MOTOR FITNESS 4.4</p><button className="appearance-trigger" type="button" onClick={() => window.dispatchEvent(new Event("fitness:open-appearance"))} aria-label="Personalizar colores y animaciones"><span className="appearance-orbit" aria-hidden="true" />Personalizar diseño</button></div>
-            <div className="v4-status-row"><span>{PROGRAM_GOAL_LABELS[activeWorkout?.planContext?.objective || profile.objetivo]}</span><span>{EXPERIENCE_LABELS[profile.experiencia]}</span><span>Semana {activeWorkout?.planContext?.week || plan.mesocycle.week}/6</span><span className="rank-status">Rango {achievements.rank.name}</span></div>
+            <div className="v4-status-row"><span>{PROGRAM_GOAL_LABELS[activeWorkout?.planContext?.objective || profile.objetivo]}</span><span>{EXPERIENCE_LABELS[profile.experiencia]}</span><span>{guided ? "Modo guiado" : "Modo avanzado"}</span><span className="rank-status">Rango {achievements.rank.name}</span></div>
             <div className="hero-title-block"><span className="hero-index">{String(activeDay + 1).padStart(2, "0")} / {String(plan.sessions.length).padStart(2, "0")}</span><h1>{session.label}</h1></div>
             <p className="subtitle">{activeWorkout ? "Tu sesión está en marcha. Registra cada serie y sigue tu ritmo." : "Tu entrenamiento está listo. Ajusta tu recuperación antes de empezar."}</p>
             <div className="v4-hero-actions">
@@ -447,12 +488,12 @@ export default function AppV44() {
           <button type="button" className="rank-link" onClick={() => setView("progreso")}>Ver logros <span aria-hidden="true">↗</span></button>
         </motion.section>
         <section className="card session-overview">
-          <div className="section-heading"><h2 className="section-title">SESIÓN ACTUAL</h2><span>{progress.completed}/{progress.planned} ejercicios</span></div>
+          <div className="section-heading"><h2 className="section-title">TU SESIÓN</h2><span>{progress.completed}/{progress.planned} ejercicios</span></div>
           <div className="session-progress-track"><motion.i animate={{ width: `${progress.percent}%` }} transition={{ type: "spring", stiffness: 260, damping: 30 }} /></div>
           <div className="session-overview-row">
-            <div><span>Estado</span><strong>{activeWorkout ? `Congelada · ${formatDuration(activeElapsed)}` : "Sin iniciar"}</strong></div>
-            <div><span>RIR sesión</span><strong>{currentRir}</strong></div>
-            <div><span>Fatiga al inicio</span><strong>{currentFatigue}</strong></div>
+            <div><span>Estado</span><strong>{activeWorkout ? `En marcha · ${formatDuration(activeElapsed)}` : "Lista para empezar"}</strong></div>
+            <div><span>{guided && sessionCompletions.length < 2 ? "Ejercicios" : "RIR sesión"}</span><strong>{guided && sessionCompletions.length < 2 ? progress.planned : currentRir}</strong></div>
+            <div><span>{guided && sessionCompletions.length < 2 ? "Duración estimada" : "Fatiga al inicio"}</span><strong>{guided && sessionCompletions.length < 2 ? `${profile.duracion} min` : currentFatigue}</strong></div>
           </div>
         </section>
         <section className="card day-picker"><div className="section-heading"><h2 className="section-title">ELIGE TU DÍA</h2><span>{plan.sessions.length} entrenamientos</span></div><div className="day-picker-grid">{plan.sessions.map((item, index) => <button key={`${item.label}-${index}`} type="button" className={index === activeDay ? "selected" : ""} aria-pressed={index === activeDay} onClick={() => changeDay(index)}><span>DÍA {String(index + 1).padStart(2, "0")}</span><strong>{item.label.replace(/^Día \d+ · /, "")}</strong><small>{item.exercises.length} ejercicios · {profile.duracion} min</small></button>)}</div></section>
@@ -464,11 +505,14 @@ export default function AppV44() {
           <section className="stack">
             <section className="card routine-card">
               <div className="section-heading"><h2 className="section-title">ENTRENAMIENTO</h2><span>{profile.duracion} min · {EQUIPMENT_LABELS[profile.equipo]}</span></div>
+              {guided ? <div className="learning-note"><span>APRENDE A TU RITMO</span><strong>{guide.title}</strong><p>{guide.detail}</p><button type="button" onClick={() => updateProfile("learningMode")({ target: { value: "advanced" } })}>Ver modo avanzado</button></div> : <button type="button" className="learning-switch" onClick={() => updateProfile("learningMode")({ target: { value: "guided" } })}>Ver un ejercicio a la vez</button>}
               <div className="session-tabs" role="tablist" aria-label="Días de entrenamiento">{plan.sessions.map((item, index) => <motion.button key={`${item.label}-${index}`} type="button" role="tab" aria-selected={index === activeDay} className={`tab ${index === activeDay ? "active" : ""}`} whileTap={{ scale: .94 }} onClick={() => changeDay(index)}>Día {index + 1}</motion.button>)}</div>
-              <div className="session-head"><div><h2>{session.label}</h2><span>{activeWorkout ? `Prescripción congelada · mínimo ${progress.minimumToFinish} ejercicios para cerrar` : "Evalúa recuperación e inicia para congelar la prescripción"}</span></div><div className="session-head-actions">{activeWorkout ? <button className={`secondary-btn abandon-btn ${abandonArmed ? "armed" : ""}`} type="button" onClick={abandonWorkout}>{abandonArmed ? "Confirmar abandono" : "Abandonar"}</button> : null}<button className="secondary-btn" type="button" onClick={finishWorkout} disabled={!activeWorkout}>Finalizar</button></div></div>
+              <div className="session-head"><div><h2>{session.label}</h2><span>{activeWorkout ? guided ? "Puedes guardar lo que hagas y salir cuando quieras." : `Prescripción congelada · mínimo ${progress.minimumToFinish} ejercicios para cerrar` : "Evalúa recuperación e inicia para congelar la prescripción"}</span></div><div className="session-head-actions">{activeWorkout && !guided ? <button className={`secondary-btn abandon-btn ${abandonArmed ? "armed" : ""}`} type="button" onClick={abandonWorkout}>{abandonArmed ? "Confirmar abandono" : "Descartar sesión"}</button> : null}{activeWorkout ? <button className="secondary-btn partial-exit" type="button" onClick={leaveWorkout}>{progress.completed ? "Guardar y salir" : "Salir por hoy"}</button> : null}<button className="secondary-btn" type="button" onClick={finishWorkout} disabled={!activeWorkout}>Terminar sesión</button></div></div>
 
+              {guided ? <div className="guide-pager"><button type="button" disabled={currentGuideIndex === 0} onClick={() => { setGuideIndex(currentGuideIndex - 1); setHelpOpen(false); }}>Anterior</button><span>Ejercicio {currentGuideIndex + 1} de {session.exercises.length}</span><button type="button" disabled={currentGuideIndex >= session.exercises.length - 1} onClick={() => { setGuideIndex(currentGuideIndex + 1); setHelpOpen(false); }}>Siguiente</button></div> : null}
               <div className="exercise-list">
-                {session.exercises.map((exerciseItem, exerciseIndex) => {
+                {(guided ? session.exercises.slice(currentGuideIndex, currentGuideIndex + 1) : session.exercises).map((exerciseItem, visibleIndex) => {
+                  const exerciseIndex = guided ? currentGuideIndex : visibleIndex;
                   const history = exerciseHistory(historicalLogs, exerciseItem.id, 4);
                   const previous = history.at(-1);
                   const previousSummary = previous ? summarizeExerciseLog(previous) : null;
@@ -485,12 +529,13 @@ export default function AppV44() {
                     <motion.article className="exercise" key={`${exerciseItem.substitutionSourceId || exerciseItem.id}-${exerciseItem.id}`} initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }} transition={{ duration: .32, delay: Math.min(exerciseIndex * .035, .18) }}>
                       <div className="exercise-top">
                         <div><div className="exercise-name">{exerciseItem.name}</div><div className="exercise-group">{exerciseItem.group} · {exerciseItem.type === "compound" ? "Compuesto" : "Aislamiento"}{exerciseItem.prRole ? ` · PR ${exerciseItem.prRole === "primary" ? "principal" : "técnico"}` : ""}</div><div className={`progression-badge progression-${advice.status}`}>{advice.badge}{advice.trend?.label && advice.trend.status !== "new" ? ` · ${advice.trend.label}` : ""}</div></div>
-                        <div className="prescription-block"><div className="prescription">{p.sets} × {p.min}-{p.max} · RIR {p.rir}</div><div className="exercise-meta">{p.intent}</div><button className="timer-btn" type="button" onClick={() => startRest(p.rest)}>Descanso {formatRest(p.rest)}</button></div>
+                        <div className="prescription-block"><div className="prescription">{guided && sessionCompletions.length < 2 ? `${p.sets} series · ${p.min}-${p.max} repeticiones` : `${p.sets} × ${p.min}-${p.max} · RIR ${p.rir}`}</div>{!guided || sessionCompletions.length >= 2 ? <div className="exercise-meta">{p.intent}</div> : null}<button className="timer-btn" type="button" onClick={() => startRest(p.rest)}>Descanso {formatRest(p.rest)}</button></div>
                       </div>
+                      {guided ? <div className="technique-card"><strong>Antes de empezar</strong><p>{techniqueTip(exerciseItem)}</p><button type="button" onClick={() => setHelpOpen((open) => !open)} aria-expanded={helpOpen}>¿No puedes hacerlo?</button>{helpOpen ? <div className="exercise-help"><p>Prueba menos peso o menos repeticiones. Puedes pasar al siguiente ejercicio y volver después. Si aparece dolor, detente.</p>{!activeWorkout && options.length > 1 ? <p>Puedes elegir otro ejercicio en «Sustitución» antes de iniciar.</p> : null}</div> : null}</div> : null}
                       {!activeWorkout && !isLockedPr && options.length > 1 ? <div className="warmup"><span>Sustitución</span><select className="control" value={exerciseItem.id} onChange={(event) => setSubstitution(session, exerciseItem, event.target.value)}>{options.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></div> : null}
                       {warmups.length ? <div className="warmup"><span>Calentamiento</span>{warmups.map((item, index) => <b key={`${item.weight}-${index}`}>{item.weight}kg × {item.reps}</b>)}</div> : null}
-                      <div className="sets-table"><div className="set-row set-head"><span>Serie</span><span>{exerciseItem.loadType === "bodyweight" ? "Lastre" : "Kg"}</span><span>Reps</span><span>RIR</span></div>{Array.from({ length: p.sets }, (_, setIndex) => { const raw = exerciseDraft[setIndex] ?? {}; return <div className="set-row" key={setIndex}><strong>{setIndex + 1}</strong><input aria-label={`${exerciseItem.name} serie ${setIndex + 1} carga`} className="log-input" type="number" min="0" step="0.5" placeholder={advice.nextWeight ?? "0"} value={raw.weight ?? ""} onChange={(event) => updateSetDraft(draftKey, setIndex, "weight", event.target.value)} /><input aria-label={`${exerciseItem.name} serie ${setIndex + 1} repeticiones`} className="log-input" type="number" min="1" max="50" placeholder={`${p.min}-${p.max}`} value={raw.reps ?? ""} onChange={(event) => updateSetDraft(draftKey, setIndex, "reps", event.target.value)} /><input aria-label={`${exerciseItem.name} serie ${setIndex + 1} RIR`} className="log-input" type="number" min="0" max="8" placeholder={p.rir} value={raw.rir ?? ""} onChange={(event) => updateSetDraft(draftKey, setIndex, "rir", event.target.value)} /></div>; })}</div>
-                      <div className="exercise-footer"><div className="advice"><span>{previous ? `Último · ${previous.sets.length} series${previousSummary?.bestE1RM ? ` · e1RM ${previousSummary.bestE1RM} kg` : ""}` : "Primera exposición"}</span><strong>{advice.action}</strong></div><motion.button className="save-btn" type="button" whileTap={{ scale: .96 }} onClick={() => saveExercise(exerciseItem)} disabled={!activeWorkout}>Guardar ejercicio</motion.button></div>
+                      <div className={`sets-table ${guided && sessionCompletions.length < 2 ? "simple-sets" : ""}`}><div className="set-row set-head"><span>Serie</span><span>{exerciseItem.loadType === "bodyweight" ? "Lastre" : "Kg"}</span><span>Reps</span>{!guided || sessionCompletions.length >= 2 ? <span>RIR</span> : null}</div>{Array.from({ length: p.sets }, (_, setIndex) => { const raw = exerciseDraft[setIndex] ?? {}; return <div className="set-row" key={setIndex}><strong>{setIndex + 1}</strong><input aria-label={`${exerciseItem.name} serie ${setIndex + 1} carga`} className="log-input" type="number" min="0" step="0.5" placeholder={advice.nextWeight ?? "0"} value={raw.weight ?? ""} onChange={(event) => updateSetDraft(draftKey, setIndex, "weight", event.target.value)} /><input aria-label={`${exerciseItem.name} serie ${setIndex + 1} repeticiones`} className="log-input" type="number" min="1" max="50" placeholder={`${p.min}-${p.max}`} value={raw.reps ?? ""} onChange={(event) => updateSetDraft(draftKey, setIndex, "reps", event.target.value)} />{!guided || sessionCompletions.length >= 2 ? <input aria-label={`${exerciseItem.name} serie ${setIndex + 1} RIR`} className="log-input" type="number" min="0" max="8" placeholder={p.rir} value={raw.rir ?? ""} onChange={(event) => updateSetDraft(draftKey, setIndex, "rir", event.target.value)} /> : null}</div>; })}</div>
+                      <div className="exercise-footer"><div className="advice"><span>{previous ? `Último · ${previous.sets.length} series${previousSummary?.bestE1RM && (!guided || sessionCompletions.length >= 6) ? ` · e1RM ${previousSummary.bestE1RM} kg` : ""}` : "Primera vez"}</span><strong>{guided && sessionCompletions.length < 2 ? "Anota el peso y las repeticiones que lograste. No pasa nada si haces menos." : advice.action}</strong></div><motion.button className="save-btn" type="button" whileTap={{ scale: .96 }} onClick={() => saveExercise(exerciseItem)} disabled={!activeWorkout}>Guardar ejercicio</motion.button></div>
                     </motion.article>
                   );
                 })}
@@ -498,10 +543,9 @@ export default function AppV44() {
             </section>
 
             <section className="card recovery-card">
-              <div className="section-heading"><h2 className="section-title">AUTORREGULACIÓN</h2><span>{activeWorkout ? "bloqueada para esta sesión" : `${plan.readiness.score}/15 subjetivo`}</span></div>
+              <div className="section-heading"><h2 className="section-title">{guided ? "¿CÓMO TE SIENTES HOY?" : "AUTORREGULACIÓN"}</h2><span>{activeWorkout ? "guardado para esta sesión" : guided ? "Antes de empezar" : `${plan.readiness.score}/15 subjetivo`}</span></div>
               <div className="readiness-grid">{[["energia","ENERGÍA","1 baja · 5 alta"],["sueno","SUEÑO","1 malo · 5 bueno"],["dolor","AGUJETAS","1 bajas · 5 altas"]].map(([key,label,hint]) => <Field key={key} label={label} hint={activeWorkout ? "Congelado hasta terminar" : hint}><div className="range-line"><input aria-label={label} type="range" min="1" max="5" disabled={Boolean(activeWorkout)} value={readiness[key]} onChange={updateReadiness(key)} /><span>{readiness[key]}</span></div></Field>)}</div>
-              <div className={`readiness-status status-${performanceFatigue.status}`}><div><span>Subjetivo</span><strong>{activeWorkout ? "Snapshot" : plan.readiness.label}</strong></div><div><span>Próxima sesión</span><strong>{performanceFatigue.label}</strong></div><div><span>RIR actual</span><strong>{currentRir}</strong></div></div>
-              <p className="body-copy">{activeWorkout ? "La autorregulación nueva se calcula en segundo plano y solo se aplicará cuando inicies la próxima sesión." : performanceFatigue.message}</p>
+              {guided && sessionCompletions.length < 2 ? <p className="body-copy">Esto nos ayuda a ajustar la rutina antes de empezar. Si algo duele, no fuerces el movimiento.</p> : <><div className={`readiness-status status-${performanceFatigue.status}`}><div><span>Subjetivo</span><strong>{activeWorkout ? "Sesión guardada" : plan.readiness.label}</strong></div><div><span>Próxima sesión</span><strong>{performanceFatigue.label}</strong></div><div><span>RIR actual</span><strong>{currentRir}</strong></div></div><p className="body-copy">{activeWorkout ? "Los cambios de recuperación se aplicarán a la próxima sesión." : performanceFatigue.message}</p></>}
             </section>
           </section>
 
@@ -522,13 +566,14 @@ export default function AppV44() {
         {view === "progreso" && <div className="progress-page">
           <div className="habits-intro"><p className="eyebrow">PROGRESO</p><h1>Tu entrenamiento en números</h1><p>Series, cargas y sesiones que realmente registraste.</p></div>
           <section className="card achievements-gallery"><div className="section-heading"><h2 className="section-title">TUS LOGROS</h2><span>{achievements.unlocked} de {achievements.milestones.length} desbloqueados</span></div><div className="achievement-rank-line"><span className={`mini-rank rank-${achievements.rank.tone}`}>{achievements.tier}</span><div><strong>{achievements.rank.name}</strong><small>{achievements.nextRank ? `Siguiente: ${achievements.nextRank.name} · faltan ${achievements.remaining} sesiones` : "Rango máximo alcanzado"}</small></div></div><div className="achievement-grid">{[...achievements.milestones].sort((a, b) => Number(b.unlocked) - Number(a.unlocked)).map((item) => <article key={item.id} className={`achievement-item ${item.unlocked ? "unlocked" : "locked"}`}><div className="achievement-icon" aria-hidden="true">{item.icon}</div><div><strong>{item.name}</strong><p>{item.detail}</p><span>{item.unlocked ? "Desbloqueado" : `${item.current} / ${item.target}`}</span></div></article>)}</div><p className="habits-note">Los rangos reconocen sesiones terminadas. Registrar sueño y comida da logros de seguimiento, sin premiar una cantidad de calorías o de horas.</p></section>
-          <div className="progress-highlights"><div className="card"><span>SESIONES TERMINADAS</span><strong>{sessionCompletions.length}</strong></div><div className="card"><span>EJERCICIOS REGISTRADOS</span><strong>{exerciseLogs.length}</strong></div><div className="card"><span>PESO ACTUAL</span><strong>{bodyLogs.length ? `${bodyLogs.at(-1).weight} kg` : "Sin registro"}</strong></div></div>
+          <div className="progress-highlights"><div className="card"><span>SESIONES TERMINADAS</span><strong>{sessionCompletions.length}</strong></div><div className="card"><span>SESIONES PARCIALES</span><strong>{partialSessions.length}</strong></div><div className="card"><span>EJERCICIOS REGISTRADOS</span><strong>{exerciseLogs.length}</strong></div></div>
           <section className="card progress-chart"><div className="section-heading"><h2 className="section-title">EVOLUCIÓN POR EJERCICIO</h2><span>Últimos 12 registros</span></div>{exerciseNames.length ? <><label htmlFor="progress-exercise">Elige un ejercicio</label><select id="progress-exercise" className="control" value={progressExercise} onChange={(event) => setSelectedExercise(event.target.value)}>{exerciseNames.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><div className="progress-bars" aria-label="Evolución de fuerza estimada">{progressHistory.map((item) => <div key={item.id} className="progress-bar-item"><div className="progress-bar-track"><i style={{ height: `${item.value != null && usableProgress.length ? Math.max(12, Math.round(item.value / Math.max(...usableProgress.map((entry) => entry.value)) * 100)) : 12}%` }} /></div><strong>{item.value != null ? `${item.value} kg` : `${item.reps} reps`}</strong><span>{item.date}</span></div>)}</div><p className="habits-note">e1RM estima fuerza a partir de tus series; no mide masa muscular.</p></> : <div className="empty">Guarda series durante una sesión para ver aquí tus cargas y repeticiones.</div>}</section>
         <section className="card context-card"><div className="section-heading"><h2 className="section-title">ENTRENA Y RECUPÉRATE</h2></div><p>Últimos {recentHabits.length} días registrados: {averageSleep != null ? `${averageSleep} h de sueño en promedio` : "faltan horas de sueño"} · {averageCalories != null ? `${averageCalories} kcal consumidas en promedio` : "faltan calorías consumidas"}.</p><p>{usableProgress.length >= 2 ? `En ${exerciseNames.find(([id]) => id === progressExercise)?.[1]}, tu fuerza estimada pasó de ${usableProgress[0].value} a ${usableProgress.at(-1).value} kg entre los registros mostrados.` : "Registra varias sesiones del mismo ejercicio para comparar tu rendimiento."}</p><p className="habits-note">Es una comparación de tus registros, no una medición de músculo ganado ni una relación causal con el sueño o la comida.</p><button className="secondary-btn" type="button" onClick={() => setView("habitos")}>Registrar sueño y comida</button></section>
         <section className="card history history-card">
           <div className="section-heading"><h2 className="section-title">SESIONES RECIENTES</h2><span>{sessionCompletions.length} cerradas</span></div>
           {sessionCompletions.length ? <div className="history-v4-list">{[...sessionCompletions].reverse().map((item) => <div className="history-row" key={item.id}><div><strong>{item.sessionLabel}</strong><span>{item.startedAt ? new Date(item.startedAt).toLocaleString() : new Date(item.createdAt).toLocaleString()}</span></div><div className="history-stats"><b>{item.plannedExercises ? `${item.completionPct}%` : "Histórico"}</b><span>{item.durationSec ? formatDuration(item.durationSec) : "Sin duración registrada"}</span></div></div>)}</div> : <div className="empty">Finaliza tu primera sesión para construir historial real de duración y cumplimiento.</div>}
         </section>
+        {partialSessions.length ? <details className="card history history-card"><summary>Sesiones parciales ({partialSessions.length})</summary>{[...partialSessions].reverse().map((item) => <div className="history-row" key={item.id}><div><strong>{item.sessionLabel}</strong><span>{new Date(item.createdAt).toLocaleDateString("es-MX")} · guardaste lo que pudiste hacer</span></div><div className="history-stats"><b>{item.completedExercises} de {item.plannedExercises} ejercicios</b></div></div>)}</details> : null}
         <details className="card history history-card"><summary>Ver todas las series registradas ({exerciseLogs.length})</summary>{exerciseLogs.length ? <div className="history-v4-list">{[...exerciseLogs].reverse().map((log) => { const summary = summarizeExerciseLog(log); return <div className="history-row" key={log.id}><div><strong>{log.exerciseName}</strong><span>{new Date(log.createdAt).toLocaleDateString("es-MX")} · {log.sessionLabel}</span></div><div className="history-stats"><b>{log.sets.length} series</b><span>{summary.bestE1RM ? `e1RM ${summary.bestE1RM} kg` : `${summary.avgReps} reps prom.`}</span></div></div>; })}</div> : <div className="empty">Todavía no hay series registradas.</div>}</details>
         </div>}
       </div>

@@ -23,6 +23,22 @@ describe("storage schema", () => {
     expect(state.profile.prLift).toBe("deadlift");
   });
 
+  it("mantiene el modo elegido y distingue sesiones parciales de completas", () => {
+    const state = sanitizeState({
+      profile: { trainingHistory: "3to12", experiencia: "basico", learningMode: "advanced", onboardingDone: true },
+      partialSessions: [{ id: "partial-1", sessionId: "work-1", completedExercises: 1, plannedExercises: 4 }],
+    });
+    expect(state.profile).toMatchObject({ trainingHistory: "3to12", learningMode: "advanced", onboardingDone: true });
+    expect(state.partialSessions).toHaveLength(1);
+    expect(state.sessionCompletions).toHaveLength(0);
+  });
+
+  it("no interrumpe con bienvenida una sesión previa al cambio de esquema", () => {
+    const state = sanitizeState({ sessionCompletions: [{ id: "done-1", sessionLabel: "Día 1" }] });
+    expect(state.profile.onboardingDone).toBe(true);
+    expect(state.profile.trainingHistory).toBe("unknown");
+  });
+
   it("preserva sesión activa, snapshot, contexto, sessionId y sustituciones", () => {
     const state = sanitizeState({
       activeWorkout: {

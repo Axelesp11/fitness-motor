@@ -7,6 +7,9 @@ export const DEFAULT_PROFILE = {
   edad: 24,
   sexo: "hombre",
   experiencia: "nunca",
+  trainingHistory: "none",
+  learningMode: "guided",
+  onboardingDone: false,
   objetivo: "hipertrofia",
   dias: 3,
   actividad: "sedentario",
@@ -26,6 +29,7 @@ export function createDefaultState() {
     exerciseLogs: [],
     bodyLogs: [],
     sessionCompletions: [],
+    partialSessions: [],
     activeWorkout: null,
     exerciseSubstitutions: {},
     startedAt: new Date().toISOString(),
@@ -66,16 +70,23 @@ export function parseImportedState(text) {
 export function sanitizeState(input) {
   const base = createDefaultState();
   const profile = { ...DEFAULT_PROFILE, ...(input?.profile ?? {}) };
+  if (input?.profile?.trainingHistory == null && (input?.exerciseLogs?.length || input?.sessionCompletions?.length || input?.activeWorkout)) profile.trainingHistory = "unknown";
   const readiness = { ...DEFAULT_READINESS, ...(input?.readiness ?? {}) };
 
   return {
     schemaVersion: SCHEMA_VERSION,
-    profile: sanitizeProfile(profile),
+    profile: sanitizeProfile({
+      ...profile,
+      onboardingDone: input?.profile?.onboardingDone ?? Boolean(input?.activeWorkout || input?.exerciseLogs?.length || input?.sessionCompletions?.length),
+    }),
     readiness: sanitizeReadiness(readiness),
     exerciseLogs: Array.isArray(input?.exerciseLogs) ? input.exerciseLogs.map(sanitizeExerciseLog).filter(Boolean).slice(-1500) : [],
     bodyLogs: Array.isArray(input?.bodyLogs) ? input.bodyLogs.map(sanitizeBodyLog).filter(Boolean).slice(-365) : [],
     sessionCompletions: Array.isArray(input?.sessionCompletions)
       ? input.sessionCompletions.map(sanitizeCompletion).filter(Boolean).slice(-700)
+      : [],
+    partialSessions: Array.isArray(input?.partialSessions)
+      ? input.partialSessions.map(sanitizeCompletion).filter(Boolean).slice(-700)
       : [],
     activeWorkout: sanitizeActiveWorkout(input?.activeWorkout),
     exerciseSubstitutions: sanitizeSubstitutions(input?.exerciseSubstitutions),
@@ -102,6 +113,7 @@ function migrateLegacy(storage) {
         sets: [{ weight: log.weight, reps: log.reps, rir: log.rir }],
       })).filter(Boolean);
     }
+    if (state.exerciseLogs.length) state.profile.onboardingDone = true;
   } catch {
     return state;
   }
@@ -115,6 +127,9 @@ function sanitizeProfile(profile) {
     edad: clampNumber(profile.edad, 18, 90, DEFAULT_PROFILE.edad),
     sexo: ["hombre", "mujer"].includes(profile.sexo) ? profile.sexo : DEFAULT_PROFILE.sexo,
     experiencia: ["nunca", "basico", "intermedio"].includes(profile.experiencia) ? profile.experiencia : DEFAULT_PROFILE.experiencia,
+    trainingHistory: ["unknown", "none", "under3", "3to12", "over12"].includes(profile.trainingHistory) ? profile.trainingHistory : DEFAULT_PROFILE.trainingHistory,
+    learningMode: ["guided", "advanced"].includes(profile.learningMode) ? profile.learningMode : DEFAULT_PROFILE.learningMode,
+    onboardingDone: profile.onboardingDone === true,
     objetivo: ["hipertrofia", "fuerza", "pr", "potencia", "resistencia", "perdida"].includes(profile.objetivo) ? profile.objetivo : DEFAULT_PROFILE.objetivo,
     dias: clampNumber(profile.dias, 2, 6, DEFAULT_PROFILE.dias),
     actividad: ["sedentario", "ligero", "activo", "muy_activo"].includes(profile.actividad) ? profile.actividad : DEFAULT_PROFILE.actividad,

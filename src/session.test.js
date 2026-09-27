@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   completeWorkout,
+  savePartialWorkout,
   createWorkoutSession,
   discardWorkoutLogs,
   sessionForWorkout,
@@ -106,6 +107,14 @@ describe("workout snapshot", () => {
 });
 
 describe("workout entity", () => {
+  it("conserva el progreso parcial sin convertirlo en sesión terminada", () => {
+    const active = createWorkoutSession(session, 0, () => "workout-1", new Date("2026-09-05T10:00:00Z"));
+    const progress = { canFinish: false, completed: 1, planned: 3, percent: 33 };
+    expect(() => completeWorkout(active, progress)).toThrow();
+    const partial = savePartialWorkout(active, progress, new Date("2026-09-05T10:15:00Z"), () => "partial-1");
+    expect(partial).toMatchObject({ sessionId: "workout-1", completedExercises: 1, completionPct: 33, durationSec: 900 });
+    expect(() => savePartialWorkout(active, { completed: 0 })).toThrow();
+  });
   it("guarda duración, porcentaje, objetivo y conteos al finalizar", () => {
     const active = createWorkoutSession(session, 0, () => "workout-1", new Date("2026-09-05T10:00:00Z"), { objective: "fuerza" });
     const progress = { canFinish: true, completed: 2, planned: 3, percent: 67 };

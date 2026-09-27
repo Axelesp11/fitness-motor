@@ -10,6 +10,7 @@ import "./runtime.css";
 import "./studio.css";
 import "./sections.css";
 import "./achievements.css";
+import "./learning.css";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
