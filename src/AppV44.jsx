@@ -32,6 +32,7 @@ import {
   sessionProgress,
 } from "./session.js";
 import { loadState, parseImportedState, saveState, serializeState } from "./storage.js";
+import { trainingAchievements } from "./achievements.js";
 
 function uid() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -133,6 +134,7 @@ export default function AppV44() {
   const importRef = useRef(null);
 
   const { profile, readiness, exerciseLogs, bodyLogs, sessionCompletions, activeWorkout, exerciseSubstitutions } = state;
+  const achievements = useMemo(() => trainingAchievements({ sessionCompletions, exerciseLogs, bodyLogs }), [sessionCompletions, exerciseLogs, bodyLogs]);
   const nutrition = useMemo(() => calcNutrition(profile, bodyLogs), [profile, bodyLogs]);
   const performanceFatigue = useMemo(() => assessProgramFatigue(exerciseLogs), [exerciseLogs]);
   const unswappedPlan = useMemo(() => {
@@ -312,6 +314,7 @@ export default function AppV44() {
       return;
     }
     const completion = completeWorkout(activeWorkout, current, new Date(), uid);
+    const nextAchievements = trainingAchievements({ sessionCompletions: [...sessionCompletions, completion], exerciseLogs, bodyLogs });
     setState((currentState) => ({
       ...currentState,
       activeWorkout: null,
@@ -321,7 +324,8 @@ export default function AppV44() {
     stopRest();
     setActiveDay((value) => (value + 1) % plan.sessions.length);
     setView("progreso");
-    setNotice(`Sesión terminada · ${current.percent}% · ${formatDuration(completion.durationSec)}.`);
+    const newRank = nextAchievements.tier > achievements.tier ? ` ¡Nuevo rango: ${nextAchievements.rank.name}!` : "";
+    setNotice(`Sesión terminada · ${current.percent}% · ${formatDuration(completion.durationSec)}.${newRank}`);
   };
 
   const abandonWorkout = () => {
@@ -422,7 +426,7 @@ export default function AppV44() {
         <header className="header v4-hero">
           <div className="v4-hero-copy">
             <div className="hero-topline"><p className="eyebrow">MOTOR FITNESS 4.4</p><button className="appearance-trigger" type="button" onClick={() => window.dispatchEvent(new Event("fitness:open-appearance"))} aria-label="Personalizar colores y animaciones"><span className="appearance-orbit" aria-hidden="true" />Personalizar diseño</button></div>
-            <div className="v4-status-row"><span>{PROGRAM_GOAL_LABELS[activeWorkout?.planContext?.objective || profile.objetivo]}</span><span>{EXPERIENCE_LABELS[profile.experiencia]}</span><span>Semana {activeWorkout?.planContext?.week || plan.mesocycle.week}/6</span></div>
+            <div className="v4-status-row"><span>{PROGRAM_GOAL_LABELS[activeWorkout?.planContext?.objective || profile.objetivo]}</span><span>{EXPERIENCE_LABELS[profile.experiencia]}</span><span>Semana {activeWorkout?.planContext?.week || plan.mesocycle.week}/6</span><span className="rank-status">Rango {achievements.rank.name}</span></div>
             <div className="hero-title-block"><span className="hero-index">{String(activeDay + 1).padStart(2, "0")} / {String(plan.sessions.length).padStart(2, "0")}</span><h1>{session.label}</h1></div>
             <p className="subtitle">{activeWorkout ? "Tu sesión está en marcha. Registra cada serie y sigue tu ritmo." : "Tu entrenamiento está listo. Ajusta tu recuperación antes de empezar."}</p>
             <div className="v4-hero-actions">
@@ -437,6 +441,11 @@ export default function AppV44() {
         {notice ? <div className="toast" role="status">{notice}</div> : null}
 
         {view === "hoy" && <>
+        <motion.section className={`card rank-card rank-${achievements.rank.tone}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 190, damping: 22 }} aria-label={`Rango actual: ${achievements.rank.name}`}>
+          <div className="rank-emblem" aria-hidden="true"><span>{String(achievements.tier).padStart(2, "0")}</span></div>
+          <div className="rank-content"><span className="rank-kicker">TU CAMINO · RANGO {achievements.tier}</span><h2>{achievements.rank.name}</h2><p>{achievements.sessions === 0 ? "Tu primera sesión te lleva a Principiante." : achievements.nextRank ? `${achievements.remaining} ${achievements.remaining === 1 ? "sesión" : "sesiones"} para ${achievements.nextRank.name}.` : "Has alcanzado el rango más alto."}</p><div className="rank-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={achievements.progress} aria-label={achievements.nextRank ? `Progreso hacia ${achievements.nextRank.name}` : "Rango máximo"}><motion.i initial={{ width: 0 }} animate={{ width: `${achievements.progress}%` }} transition={{ duration: .8, ease: "easeOut" }} /></div><small>{achievements.sessions} sesiones completas · {achievements.unlocked} de {achievements.milestones.length} logros</small></div>
+          <button type="button" className="rank-link" onClick={() => setView("progreso")}>Ver logros <span aria-hidden="true">↗</span></button>
+        </motion.section>
         <section className="card session-overview">
           <div className="section-heading"><h2 className="section-title">SESIÓN ACTUAL</h2><span>{progress.completed}/{progress.planned} ejercicios</span></div>
           <div className="session-progress-track"><motion.i animate={{ width: `${progress.percent}%` }} transition={{ type: "spring", stiffness: 260, damping: 30 }} /></div>
@@ -512,6 +521,7 @@ export default function AppV44() {
 
         {view === "progreso" && <div className="progress-page">
           <div className="habits-intro"><p className="eyebrow">PROGRESO</p><h1>Tu entrenamiento en números</h1><p>Series, cargas y sesiones que realmente registraste.</p></div>
+          <section className="card achievements-gallery"><div className="section-heading"><h2 className="section-title">TUS LOGROS</h2><span>{achievements.unlocked} de {achievements.milestones.length} desbloqueados</span></div><div className="achievement-rank-line"><span className={`mini-rank rank-${achievements.rank.tone}`}>{achievements.tier}</span><div><strong>{achievements.rank.name}</strong><small>{achievements.nextRank ? `Siguiente: ${achievements.nextRank.name} · faltan ${achievements.remaining} sesiones` : "Rango máximo alcanzado"}</small></div></div><div className="achievement-grid">{[...achievements.milestones].sort((a, b) => Number(b.unlocked) - Number(a.unlocked)).map((item) => <article key={item.id} className={`achievement-item ${item.unlocked ? "unlocked" : "locked"}`}><div className="achievement-icon" aria-hidden="true">{item.icon}</div><div><strong>{item.name}</strong><p>{item.detail}</p><span>{item.unlocked ? "Desbloqueado" : `${item.current} / ${item.target}`}</span></div></article>)}</div><p className="habits-note">Los rangos reconocen sesiones terminadas. Registrar sueño y comida da logros de seguimiento, sin premiar una cantidad de calorías o de horas.</p></section>
           <div className="progress-highlights"><div className="card"><span>SESIONES TERMINADAS</span><strong>{sessionCompletions.length}</strong></div><div className="card"><span>EJERCICIOS REGISTRADOS</span><strong>{exerciseLogs.length}</strong></div><div className="card"><span>PESO ACTUAL</span><strong>{bodyLogs.length ? `${bodyLogs.at(-1).weight} kg` : "Sin registro"}</strong></div></div>
           <section className="card progress-chart"><div className="section-heading"><h2 className="section-title">EVOLUCIÓN POR EJERCICIO</h2><span>Últimos 12 registros</span></div>{exerciseNames.length ? <><label htmlFor="progress-exercise">Elige un ejercicio</label><select id="progress-exercise" className="control" value={progressExercise} onChange={(event) => setSelectedExercise(event.target.value)}>{exerciseNames.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><div className="progress-bars" aria-label="Evolución de fuerza estimada">{progressHistory.map((item) => <div key={item.id} className="progress-bar-item"><div className="progress-bar-track"><i style={{ height: `${item.value != null && usableProgress.length ? Math.max(12, Math.round(item.value / Math.max(...usableProgress.map((entry) => entry.value)) * 100)) : 12}%` }} /></div><strong>{item.value != null ? `${item.value} kg` : `${item.reps} reps`}</strong><span>{item.date}</span></div>)}</div><p className="habits-note">e1RM estima fuerza a partir de tus series; no mide masa muscular.</p></> : <div className="empty">Guarda series durante una sesión para ver aquí tus cargas y repeticiones.</div>}</section>
         <section className="card context-card"><div className="section-heading"><h2 className="section-title">ENTRENA Y RECUPÉRATE</h2></div><p>Últimos {recentHabits.length} días registrados: {averageSleep != null ? `${averageSleep} h de sueño en promedio` : "faltan horas de sueño"} · {averageCalories != null ? `${averageCalories} kcal consumidas en promedio` : "faltan calorías consumidas"}.</p><p>{usableProgress.length >= 2 ? `En ${exerciseNames.find(([id]) => id === progressExercise)?.[1]}, tu fuerza estimada pasó de ${usableProgress[0].value} a ${usableProgress.at(-1).value} kg entre los registros mostrados.` : "Registra varias sesiones del mismo ejercicio para comparar tu rendimiento."}</p><p className="habits-note">Es una comparación de tus registros, no una medición de músculo ganado ni una relación causal con el sueño o la comida.</p><button className="secondary-btn" type="button" onClick={() => setView("habitos")}>Registrar sueño y comida</button></section>

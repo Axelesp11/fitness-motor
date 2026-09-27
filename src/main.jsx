@@ -9,6 +9,7 @@ import "./appV44.css";
 import "./runtime.css";
 import "./studio.css";
 import "./sections.css";
+import "./achievements.css";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
