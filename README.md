@@ -46,7 +46,7 @@ Motor local-first de entrenamiento y nutrición orientativa para adultos sanos, 
 - Vite 8
 - Vitest 5
 - Sin backend ni cuentas en esta etapa.
-- Estado persistente en `localStorage` (`fitness-motor-v3`) con **schema 5** y migración compatible.
+- Estado persistente en `localStorage` (`fitness-motor-v4`) con **schema 6**. Cada instalación inicia con un cuestionario vacío; el estado `v3` queda disponible para recuperación voluntaria, sin borrarse.
 - `AppV44.jsx`: experiencia principal y ciclo de sesión inmutable.
 - `progression.js`: progresión por objetivo.
 - `programFatigue.js`: detección de fatiga objetiva sistémica y ajuste conservador.

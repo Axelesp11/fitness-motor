@@ -1,20 +1,23 @@
-export const STORAGE_KEY = "fitness-motor-v3";
-export const SCHEMA_VERSION = 5;
+export const STORAGE_KEY = "fitness-motor-v4";
+export const PREVIOUS_STORAGE_KEY = "fitness-motor-v3";
+export const RESET_BACKUP_KEY = "fitness-motor-before-reset";
+export const SCHEMA_VERSION = 6;
 
 export const DEFAULT_PROFILE = {
-  peso: 75,
-  estatura: 172,
-  edad: 24,
-  sexo: "hombre",
+  peso: null,
+  estatura: null,
+  edad: null,
+  sexo: null,
   experiencia: "nunca",
-  trainingHistory: "none",
+  trainingHistory: null,
   learningMode: "guided",
   onboardingDone: false,
-  objetivo: "hipertrofia",
-  dias: 3,
-  actividad: "sedentario",
-  equipo: "gym",
-  duracion: 60,
+  objetivo: null,
+  dias: null,
+  weekDays: [],
+  actividad: null,
+  equipo: null,
+  duracion: null,
   enfoque: "balanced",
   prLift: "bench_press",
 };
@@ -41,9 +44,20 @@ export function loadState(storage = window.localStorage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (raw) return sanitizeState(JSON.parse(raw));
   } catch {
-    // Fall through to migration/default state.
+    // Fall through to a fresh profile.
   }
-  return migrateLegacy(storage);
+  return createDefaultState();
+}
+
+export function loadPreviousState(storage = window.localStorage) {
+  try {
+    const resetBackup = storage.getItem(RESET_BACKUP_KEY);
+    if (resetBackup) return sanitizeState(JSON.parse(resetBackup));
+    const raw = storage.getItem(PREVIOUS_STORAGE_KEY);
+    if (raw) return sanitizeState(JSON.parse(raw));
+    if (["fitness-motor-profile", "fitness-motor-readiness", "fitness-motor-logs"].some((key) => storage.getItem(key))) return sanitizeState(migrateLegacy(storage));
+  } catch { /* An unreadable backup stays untouched. */ }
+  return null;
 }
 
 export function saveState(state, storage = window.localStorage) {
@@ -72,13 +86,12 @@ export function sanitizeState(input) {
   const profile = { ...DEFAULT_PROFILE, ...(input?.profile ?? {}) };
   if (input?.profile?.trainingHistory == null && (input?.exerciseLogs?.length || input?.sessionCompletions?.length || input?.activeWorkout)) profile.trainingHistory = "unknown";
   const readiness = { ...DEFAULT_READINESS, ...(input?.readiness ?? {}) };
+  const cleanProfile = sanitizeProfile(profile);
+  cleanProfile.onboardingDone = Boolean((input?.profile?.onboardingDone ?? (input?.activeWorkout || input?.exerciseLogs?.length || input?.sessionCompletions?.length)) && hasCompleteProfile(cleanProfile));
 
   return {
     schemaVersion: SCHEMA_VERSION,
-    profile: sanitizeProfile({
-      ...profile,
-      onboardingDone: input?.profile?.onboardingDone ?? Boolean(input?.activeWorkout || input?.exerciseLogs?.length || input?.sessionCompletions?.length),
-    }),
+    profile: cleanProfile,
     readiness: sanitizeReadiness(readiness),
     exerciseLogs: Array.isArray(input?.exerciseLogs) ? input.exerciseLogs.map(sanitizeExerciseLog).filter(Boolean).slice(-1500) : [],
     bodyLogs: Array.isArray(input?.bodyLogs) ? input.bodyLogs.map(sanitizeBodyLog).filter(Boolean).slice(-365) : [],
@@ -121,23 +134,37 @@ function migrateLegacy(storage) {
 }
 
 function sanitizeProfile(profile) {
+  const weekDays = Array.isArray(profile.weekDays)
+    ? ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"].filter((day) => profile.weekDays.includes(day)).slice(0, 6)
+    : [];
   return {
-    peso: clampNumber(profile.peso, 35, 250, DEFAULT_PROFILE.peso),
-    estatura: clampNumber(profile.estatura, 120, 230, DEFAULT_PROFILE.estatura),
-    edad: clampNumber(profile.edad, 18, 90, DEFAULT_PROFILE.edad),
-    sexo: ["hombre", "mujer"].includes(profile.sexo) ? profile.sexo : DEFAULT_PROFILE.sexo,
+    peso: optionalNumber(profile.peso, 35, 250),
+    estatura: optionalNumber(profile.estatura, 120, 230),
+    edad: optionalNumber(profile.edad, 18, 90),
+    sexo: ["hombre", "mujer"].includes(profile.sexo) ? profile.sexo : null,
     experiencia: ["nunca", "basico", "intermedio"].includes(profile.experiencia) ? profile.experiencia : DEFAULT_PROFILE.experiencia,
     trainingHistory: ["unknown", "none", "under3", "3to12", "over12"].includes(profile.trainingHistory) ? profile.trainingHistory : DEFAULT_PROFILE.trainingHistory,
     learningMode: ["guided", "advanced"].includes(profile.learningMode) ? profile.learningMode : DEFAULT_PROFILE.learningMode,
     onboardingDone: profile.onboardingDone === true,
     objetivo: ["hipertrofia", "fuerza", "pr", "potencia", "resistencia", "perdida"].includes(profile.objetivo) ? profile.objetivo : DEFAULT_PROFILE.objetivo,
-    dias: clampNumber(profile.dias, 2, 6, DEFAULT_PROFILE.dias),
+    dias: optionalNumber(profile.dias, 2, 6),
+    weekDays,
     actividad: ["sedentario", "ligero", "activo", "muy_activo"].includes(profile.actividad) ? profile.actividad : DEFAULT_PROFILE.actividad,
     equipo: ["gym", "home", "minimal"].includes(profile.equipo) ? profile.equipo : DEFAULT_PROFILE.equipo,
-    duracion: [45, 60, 75, 90].includes(Number(profile.duracion)) ? Number(profile.duracion) : DEFAULT_PROFILE.duracion,
+    duracion: profile.duracion != null && [45, 60, 75, 90].includes(Number(profile.duracion)) ? Number(profile.duracion) : DEFAULT_PROFILE.duracion,
     enfoque: ["balanced", "Pecho", "Espalda", "Piernas", "Hombro", "Brazos"].includes(profile.enfoque) ? profile.enfoque : DEFAULT_PROFILE.enfoque,
     prLift: ["bench_press", "back_squat", "deadlift", "overhead_press"].includes(profile.prLift) ? profile.prLift : DEFAULT_PROFILE.prLift,
   };
+}
+
+function optionalNumber(value, min, max) {
+  return value === null || value === undefined || value === "" || !Number.isFinite(Number(value)) ? null : clampNumber(value, min, max, null);
+}
+
+function hasCompleteProfile(profile) {
+  return profile.edad != null && profile.estatura != null && profile.peso != null
+    && profile.sexo != null && profile.actividad != null && profile.objetivo != null
+    && profile.dias != null && profile.equipo != null && profile.duracion != null;
 }
 
 function sanitizeReadiness(value) {

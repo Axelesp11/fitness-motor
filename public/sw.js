@@ -1,4 +1,4 @@
-const CACHE = "motor-fitness-shell-v5";
+const CACHE = "motor-fitness-shell-v6";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",

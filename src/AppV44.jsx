@@ -32,9 +32,10 @@ import {
   sessionForWorkout,
   sessionProgress,
 } from "./session.js";
-import { loadState, parseImportedState, saveState, serializeState } from "./storage.js";
+import { createDefaultState, loadPreviousState, loadState, parseImportedState, RESET_BACKUP_KEY, saveState, serializeState } from "./storage.js";
 import { trainingAchievements } from "./achievements.js";
 import { estimateExperience, learningStep, techniqueTip, TRAINING_HISTORY } from "./learning.js";
+import { SUGGESTED_DAYS, WEEKDAYS } from "./onboarding.js";
 import Welcome from "./Welcome.jsx";
 
 function uid() {
@@ -81,8 +82,9 @@ function RestTimer({ timer, onStart, onStop }) {
   );
 }
 
-function SettingsSheet({ open, onClose, state, updateProfile, exportData, importRef, importData, clearSubstitutions }) {
+function SettingsSheet({ open, onClose, state, updateProfile, exportData, importRef, importData, clearSubstitutions, onReset }) {
   const { profile, exerciseSubstitutions, activeWorkout } = state;
+  const [resetArmed, setResetArmed] = useState(false);
   return (
     <AnimatePresence>
       {open ? (
@@ -95,10 +97,11 @@ function SettingsSheet({ open, onClose, state, updateProfile, exportData, import
             <div className="motor-settings-grid">
               <Field label="OBJETIVO"><select className="control" disabled={Boolean(activeWorkout)} value={profile.objetivo} onChange={updateProfile("objetivo")}>{Object.entries(PROGRAM_GOAL_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
               {profile.objetivo === "pr" ? <Field label="LEVANTAMIENTO PR"><select className="control" disabled={Boolean(activeWorkout)} value={profile.prLift} onChange={updateProfile("prLift")}>{PR_LIFT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field> : null}
-              <Field label="DÍAS POR SEMANA"><select className="control" disabled={Boolean(activeWorkout)} value={profile.dias} onChange={updateProfile("dias")}>{SPLIT_OPTIONS.map(([days, label]) => <option key={days} value={days}>{days} días · {label}</option>)}</select></Field>
+              <Field label="DÍAS POR SEMANA"><select className="control" disabled={Boolean(activeWorkout)} value={profile.dias ?? ""} onChange={updateProfile("dias")}>{SPLIT_OPTIONS.map(([days, label]) => <option key={days} value={days}>{days} días · {label}</option>)}</select></Field>
               <Field label="EQUIPO"><select className="control" disabled={Boolean(activeWorkout)} value={profile.equipo} onChange={updateProfile("equipo")}>{Object.entries(EQUIPMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
               <Field label="DURACIÓN"><select className="control" disabled={Boolean(activeWorkout)} value={profile.duracion} onChange={updateProfile("duracion")}>{[45,60,75,90].map((value) => <option key={value} value={value}>{value} min</option>)}</select></Field>
             </div>
+            <div className="settings-weekdays"><strong>Tus días de entrenamiento</strong><div className="welcome-weekdays" role="group" aria-label="Días de entrenamiento">{WEEKDAYS.map(([id, label]) => <button key={id} type="button" disabled={Boolean(activeWorkout)} aria-pressed={profile.weekDays.includes(id)} onClick={() => updateProfile("weekDays")({ target: { value: profile.weekDays.includes(id) ? profile.weekDays.filter((day) => day !== id) : [...profile.weekDays, id] } })}>{label}</button>)}</div><small>Elige de 2 a 6 días. Al cambiar la frecuencia se sugieren días que puedes modificar.</small></div>
             <div className="motor-settings-separator"><span>Experiencia y aprendizaje</span></div>
             <p className="settings-help">Elige cuánto detalle quieres ver. Puedes cambiar el modo cuando quieras.</p>
             <div className="motor-settings-grid">
@@ -114,9 +117,9 @@ function SettingsSheet({ open, onClose, state, updateProfile, exportData, import
             </details>
             <div className="motor-settings-separator"><span>Datos personales</span></div>
             <div className="motor-settings-grid compact">
-              <Field label="PESO (KG)"><input className="control" type="number" min="35" max="250" step="0.1" value={profile.peso} onChange={updateProfile("peso")} /></Field>
-              <Field label="ESTATURA (CM)"><input className="control" type="number" min="120" max="230" value={profile.estatura} onChange={updateProfile("estatura")} /></Field>
-              <Field label="EDAD"><input className="control" type="number" min="18" max="90" value={profile.edad} onChange={updateProfile("edad")} /></Field>
+              <Field label="PESO (KG)"><input className="control" type="number" min="35" max="250" step="0.1" value={profile.peso ?? ""} onChange={updateProfile("peso")} /></Field>
+              <Field label="ESTATURA (CM)"><input className="control" type="number" min="120" max="230" value={profile.estatura ?? ""} onChange={updateProfile("estatura")} /></Field>
+              <Field label="EDAD"><input className="control" type="number" min="18" max="90" value={profile.edad ?? ""} onChange={updateProfile("edad")} /></Field>
               <Field label="SEXO"><select className="control" value={profile.sexo} onChange={updateProfile("sexo")}><option value="hombre">Hombre</option><option value="mujer">Mujer</option></select></Field>
             </div>
             <div className="motor-settings-separator"><span>Rutina y datos</span></div>
@@ -126,6 +129,8 @@ function SettingsSheet({ open, onClose, state, updateProfile, exportData, import
               <button className="secondary-btn" type="button" onClick={() => importRef.current?.click()} disabled={Boolean(activeWorkout)}>Importar respaldo</button>
               <input ref={importRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={importData} />
             </div>
+            <button className="settings-reset" type="button" onClick={() => { if (resetArmed) { setResetArmed(false); onReset(); } else setResetArmed(true); }}>{resetArmed ? "Confirmar: borrar mi progreso y crear otro perfil" : "Empezar desde cero"}</button>
+            {resetArmed && <p className="settings-help">Tu perfil actual quedará guardado como respaldo local para recuperarlo desde la bienvenida.</p>}
           </motion.section>
         </motion.div>
       ) : null}
@@ -135,13 +140,14 @@ function SettingsSheet({ open, onClose, state, updateProfile, exportData, import
 
 export default function AppV44() {
   const [state, setState] = useState(() => loadState());
+  const [hasPreviousData, setHasPreviousData] = useState(() => Boolean(loadPreviousState()));
   const [activeDay, setActiveDay] = useState(() => state.activeWorkout?.sessionIndex ?? 0);
   const [view, setView] = useState("hoy");
   const [selectedExercise, setSelectedExercise] = useState("");
   const [guideIndex, setGuideIndex] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
   const [drafts, setDrafts] = useState({});
-  const [bodyDraft, setBodyDraft] = useState({ date: localDate(), weight: state.profile.peso, calories: "", sleepHours: "" });
+  const [bodyDraft, setBodyDraft] = useState({ date: localDate(), weight: state.profile.peso ?? "", calories: "", sleepHours: "" });
   const [notice, setNotice] = useState("");
   const [timer, setTimer] = useState({ remaining: 0, total: 0, running: false });
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -229,14 +235,15 @@ export default function AppV44() {
   }, [abandonArmed]);
 
   const updateProfile = (key) => (event) => {
-    const lockedProgrammingKeys = ["objetivo", "prLift", "dias", "experiencia", "trainingHistory", "equipo", "duracion", "enfoque"];
+    const lockedProgrammingKeys = ["objetivo", "prLift", "dias", "weekDays", "experiencia", "trainingHistory", "equipo", "duracion", "enfoque"];
     if (activeWorkout && lockedProgrammingKeys.includes(key)) {
       setNotice("La sesión activa está congelada. Cambia la programación al terminar.");
       return;
     }
     const numeric = ["peso", "estatura", "edad", "dias", "duracion"].includes(key);
-    const value = numeric ? Number(event.target.value) : event.target.value;
-    setState((current) => ({ ...current, profile: { ...current.profile, [key]: value, ...(key === "trainingHistory" && value !== "unknown" ? { experiencia: estimateExperience(value) } : {}) } }));
+    const value = key === "weekDays" ? WEEKDAYS.map(([id]) => id).filter((id) => event.target.value.includes(id)) : numeric ? Number(event.target.value) : event.target.value;
+    if (key === "weekDays" && (value.length < 2 || value.length > 6)) { setNotice("Elige entre 2 y 6 días de entrenamiento."); return; }
+    setState((current) => ({ ...current, profile: { ...current.profile, [key]: value, ...(key === "trainingHistory" && value !== "unknown" ? { experiencia: estimateExperience(value) } : {}), ...(key === "dias" ? { weekDays: SUGGESTED_DAYS[value] } : {}), ...(key === "weekDays" ? { dias: value.length } : {}) } }));
   };
 
   const updateReadiness = (key) => (event) => {
@@ -465,12 +472,31 @@ export default function AppV44() {
   const expenditureLabel = nutrition.expenditure.source === "adaptive" ? `Adaptativo · ${Math.round(nutrition.expenditure.confidence * 100)}%` : nutrition.expenditure.source === "blended" ? `Mixto · ${Math.round(nutrition.expenditure.confidence * 100)}%` : "Fórmula inicial";
   const trendText = nutrition.trend.weeklyChangePct == null ? "Sin tendencia suficiente" : `${nutrition.trend.weeklyChangeKg > 0 ? "+" : ""}${nutrition.trend.weeklyChangeKg} kg/sem`;
 
+  const resetProfile = () => {
+    try { window.localStorage.setItem(RESET_BACKUP_KEY, serializeState(state)); }
+    catch { setNotice("No se pudo guardar el respaldo; inténtalo de nuevo."); return; }
+    const fresh = createDefaultState();
+    setState(fresh);
+    setBodyDraft({ date: localDate(), weight: "", calories: "", sleepHours: "" });
+    setHasPreviousData(true);
+    setActiveDay(0);
+    setView("hoy");
+    setSettingsOpen(false);
+  };
+
+  if (!profile.onboardingDone && !activeWorkout) return <main className="app-shell app-v4 onboarding-active"><Welcome onComplete={(answers) => {
+    setState((current) => ({ ...current, profile: { ...current.profile, ...answers, experiencia: estimateExperience(answers.trainingHistory) } }));
+    setBodyDraft((current) => ({ ...current, weight: answers.peso }));
+  }} onRestore={hasPreviousData ? () => {
+    const previous = loadPreviousState();
+    if (!previous) return;
+    setState(previous);
+    setBodyDraft((current) => ({ ...current, weight: previous.profile.peso ?? "" }));
+  } : null} /></main>;
+
   return (
     <main className={`app-shell app-v4 goal-${profile.objetivo} view-${view} ${!profile.onboardingDone && !activeWorkout ? "onboarding-active" : ""} ${guided ? "learning-guided" : "learning-advanced"}`}>
-      {!profile.onboardingDone && !activeWorkout ? <Welcome onComplete={({ history, mode }) => {
-        setState((current) => ({ ...current, profile: { ...current.profile, trainingHistory: history, experiencia: estimateExperience(history), learningMode: mode, onboardingDone: true } }));
-      }} /> : null}
-      <div className="container" inert={!profile.onboardingDone && !activeWorkout ? true : undefined}>
+      <div className="container">
         <nav className="motor-view-nav" aria-label="Secciones de Fitness Motor">{VIEWS.map(([id, label]) => <button key={id} type="button" aria-current={view === id ? "page" : undefined} onClick={() => setView(id)}>{label}</button>)}<button type="button" className="motor-nav-settings" onClick={() => setSettingsOpen(true)}>Ajustes</button></nav>
         {(view === "progreso" || view === "habitos") && <button className="mobile-settings" type="button" onClick={() => setSettingsOpen(true)}>Configurar entrenamiento</button>}
         {(view === "hoy" || view === "entrenar") && <>
@@ -492,7 +518,7 @@ export default function AppV44() {
         {notice ? <div className="toast" role="status">{notice}</div> : null}
 
         {view === "hoy" && <>
-        <section className="card day-picker"><div className="section-heading"><h2 className="section-title">ELIGE TU DÍA</h2><span>{plan.sessions.length} entrenamientos</span></div><div className="day-picker-grid">{plan.sessions.map((item, index) => <button key={`${item.label}-${index}`} type="button" className={index === activeDay ? "selected" : ""} aria-pressed={index === activeDay} onClick={() => changeDay(index)}><span>DÍA {String(index + 1).padStart(2, "0")}</span><strong>{item.label.replace(/^Día \d+ · /, "")}</strong><small>{item.exercises.length} ejercicios · {profile.duracion} min</small></button>)}</div></section>
+        <section className="card day-picker"><div className="section-heading"><h2 className="section-title">ELIGE TU DÍA</h2><span>{plan.sessions.length} entrenamientos</span></div><div className="day-picker-grid">{plan.sessions.map((item, index) => <button key={`${item.label}-${index}`} type="button" className={index === activeDay ? "selected" : ""} aria-pressed={index === activeDay} onClick={() => changeDay(index)}><span>DÍA {String(index + 1).padStart(2, "0")}{profile.weekDays[index] ? ` · ${WEEKDAYS.find(([id]) => id === profile.weekDays[index])?.[1]}` : ""}</span><strong>{item.label.replace(/^Día \d+ · /, "")}</strong><small>{item.exercises.length} ejercicios · {profile.duracion} min</small></button>)}</div></section>
         <section className="card session-overview">
           <div className="section-heading"><h2 className="section-title">TU SESIÓN</h2><span>{progress.completed}/{progress.planned} ejercicios</span></div>
           <div className="session-progress-track"><motion.i animate={{ width: `${progress.percent}%` }} transition={{ type: "spring", stiffness: 260, damping: 30 }} /></div>
@@ -562,7 +588,7 @@ export default function AppV44() {
           </section>
 
           <aside className="v4-side-stack">
-            <section className="card day-guide"><div className="section-heading"><h2 className="section-title">CAMBIAR DÍA</h2></div><div className="day-guide-list">{plan.sessions.map((item, index) => <button key={`${item.label}-${index}`} className={index === activeDay ? "selected" : ""} type="button" aria-pressed={index === activeDay} onClick={() => changeDay(index)}>{index + 1}. {item.label.replace(/^Día \d+ · /, "")}</button>)}</div></section>
+            <section className="card day-guide"><div className="section-heading"><h2 className="section-title">CAMBIAR DÍA</h2></div><div className="day-guide-list">{plan.sessions.map((item, index) => <button key={`${item.label}-${index}`} className={index === activeDay ? "selected" : ""} type="button" aria-pressed={index === activeDay} onClick={() => changeDay(index)}>{profile.weekDays[index] ? `${WEEKDAYS.find(([id]) => id === profile.weekDays[index])?.[1]} · ` : `${index + 1}. `}{item.label.replace(/^Día \d+ · /, "")}</button>)}</div></section>
             <details className="card volume-card"><summary>Volumen semanal · próxima prescripción</summary><div className="volume-grid">{Object.entries(plan.weeklyVolume).filter(([, value]) => value > 0).map(([muscle, value]) => <div className="volume-chip" key={muscle}><span>{muscle}</span><strong>{value}</strong></div>)}</div></details>
             <details className="card program-details"><summary><span>PROGRAMACIÓN SIGUIENTE</span><strong>{plan.programming.title}</strong></summary><p className="body-copy">{plan.programming.summary}</p><div className="program-mini-grid"><div><span>Principales</span><strong>{plan.programming.primaryRange}</strong></div><div><span>Accesorios</span><strong>{plan.programming.accessoryRange}</strong></div><div><span>Descanso</span><strong>{plan.programming.rest}</strong></div></div><p className="body-copy"><strong>Split:</strong> {plan.programming.splitNote}</p>{plan.programming.warning ? <div className="empty compact">{plan.programming.warning}</div> : null}</details>
           </aside>
@@ -592,7 +618,7 @@ export default function AppV44() {
         <details className="card history history-card"><summary>Ver todas las series registradas ({exerciseLogs.length})</summary>{exerciseLogs.length ? <div className="history-v4-list">{[...exerciseLogs].reverse().map((log) => { const summary = summarizeExerciseLog(log); return <div className="history-row" key={log.id}><div><strong>{log.exerciseName}</strong><span>{new Date(log.createdAt).toLocaleDateString("es-MX")} · {log.sessionLabel}</span></div><div className="history-stats"><b>{log.sets.length} series</b><span>{summary.bestE1RM ? `e1RM ${summary.bestE1RM} kg` : `${summary.avgReps} reps prom.`}</span></div></div>; })}</div> : <div className="empty">Todavía no hay series registradas.</div>}</details>
         </div>}
       </div>
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} state={state} updateProfile={updateProfile} exportData={exportData} importRef={importRef} importData={importData} clearSubstitutions={() => setState((current) => ({ ...current, exerciseSubstitutions: {} }))} />
+      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} state={state} updateProfile={updateProfile} exportData={exportData} importRef={importRef} importData={importData} clearSubstitutions={() => setState((current) => ({ ...current, exerciseSubstitutions: {} }))} onReset={resetProfile} />
     </main>
   );
 }

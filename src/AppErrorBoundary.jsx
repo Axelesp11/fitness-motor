@@ -1,6 +1,6 @@
 import { Component } from "react";
 
-const STORAGE_KEY = "fitness-motor-v3";
+import { STORAGE_KEY } from "./storage.js";
 
 export default class AppErrorBoundary extends Component {
   constructor(props) {
