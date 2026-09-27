@@ -49,6 +49,12 @@ export default function PwaShell({ children }) {
   const motionLevel = prefs.motion;
   const motionOff = motionLevel === "reduced";
 
+  useEffect(() => {
+    const openAppearance = () => setSettingsOpen(true);
+    window.addEventListener("fitness:open-appearance", openAppearance);
+    return () => window.removeEventListener("fitness:open-appearance", openAppearance);
+  }, []);
+
   const buzz = (pattern) => {
     if (!prefs.haptics || document.visibilityState !== "visible") return;
     if (typeof navigator.vibrate === "function") navigator.vibrate(pattern);

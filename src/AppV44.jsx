@@ -382,12 +382,12 @@ export default function AppV44() {
       <div className="container">
         <header className="header v4-hero">
           <div className="v4-hero-copy">
-            <p className="eyebrow">MOTOR FITNESS 4.4</p>
+            <div className="hero-topline"><p className="eyebrow">MOTOR FITNESS 4.4</p><button className="appearance-trigger" type="button" onClick={() => window.dispatchEvent(new Event("fitness:open-appearance"))} aria-label="Personalizar colores y animaciones"><span className="appearance-orbit" aria-hidden="true" />Personalizar diseño</button></div>
             <div className="v4-status-row"><span>{PROGRAM_GOAL_LABELS[activeWorkout?.planContext?.objective || profile.objetivo]}</span><span>{EXPERIENCE_LABELS[profile.experiencia]}</span><span>Semana {activeWorkout?.planContext?.week || plan.mesocycle.week}/6</span></div>
-            <h1>{session.label}</h1>
-            <p className="subtitle">La sesión se congela al iniciar: ningún cambio de recuperación o fatiga altera tu entrenamiento a mitad de camino.</p>
+            <div className="hero-title-block"><span className="hero-index">{String(activeDay + 1).padStart(2, "0")} / {String(plan.sessions.length).padStart(2, "0")}</span><h1>{session.label}</h1></div>
+            <p className="subtitle">{activeWorkout ? "Tu sesión está en marcha. Registra cada serie y sigue tu ritmo." : "Tu entrenamiento está listo. Ajusta tu recuperación antes de empezar."}</p>
             <div className="v4-hero-actions">
-              <motion.button className="primary-btn" type="button" whileTap={{ scale: .96 }} onClick={startWorkout}>{activeWorkout ? `Sesión bloqueada · ${formatDuration(activeElapsed)}` : "Iniciar entrenamiento"}</motion.button>
+              <motion.button className="primary-btn" type="button" whileHover={{ y: -2 }} whileTap={{ scale: .96 }} onClick={startWorkout}>{activeWorkout ? `Ver sesión · ${formatDuration(activeElapsed)}` : "Iniciar entrenamiento"}<span aria-hidden="true"> ↗</span></motion.button>
               <motion.button className="secondary-btn settings-launch" type="button" whileTap={{ scale: .96 }} onClick={() => setSettingsOpen(true)}>Configurar motor</motion.button>
             </div>
           </div>
