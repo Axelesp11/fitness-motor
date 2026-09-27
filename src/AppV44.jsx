@@ -85,6 +85,7 @@ function RestTimer({ timer, onStart, onStop }) {
 function SettingsSheet({ open, onClose, state, updateProfile, exportData, importRef, importData, clearSubstitutions, onReset }) {
   const { profile, exerciseSubstitutions, activeWorkout } = state;
   const [resetArmed, setResetArmed] = useState(false);
+  useEffect(() => { if (!open) setResetArmed(false); }, [open]);
   return (
     <AnimatePresence>
       {open ? (
