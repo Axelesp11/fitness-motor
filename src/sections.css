@@ -2,6 +2,10 @@
 .motor-view-nav button { border: 0; border-radius: 12px; padding: 11px 18px; color: #b9c3d3; background: transparent; font-size: 14px; font-weight: 750; }
 .motor-view-nav button[aria-current="page"] { color: #0b1018; background: var(--ux-a); box-shadow: 0 4px 20px var(--ux-glow); }
 .motor-view-nav .motor-nav-settings { margin-left: auto; color: #e4ebf5; }
+.settings-help { color: #b6c4d6; font-size: 14px; line-height: 1.45; margin: 0 0 14px; }
+.settings-advanced { border: 1px solid rgba(255,255,255,.11); border-radius: 14px; margin: 16px 0; padding: 13px 16px; background: rgba(255,255,255,.025); }
+.settings-advanced summary, .volume-card summary { cursor: pointer; color: #e4edf8; font-weight: 750; }
+.settings-advanced .motor-settings-grid, .volume-card .volume-grid { margin-top: 15px; }
 .mobile-settings { display: none; }
 .day-picker { margin-bottom: 14px; }
 .day-picker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 10px; }
