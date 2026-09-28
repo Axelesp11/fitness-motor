@@ -48,6 +48,42 @@
   overflow-wrap: anywhere;
 }
 
+/* Zeus — identidad visual de la pantalla de inicio */
+.app-v4 .v4-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.app-v4 .v4-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(46%, 430px);
+  background:
+    linear-gradient(90deg, rgba(10,12,18,.92) 0%, rgba(10,12,18,.34) 35%, rgba(10,12,18,.04) 72%),
+    url("/zeus-fitness.webp") center / cover no-repeat;
+  opacity: .96;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app-v4 .v4-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(8,10,15,.97) 0%, rgba(8,10,15,.87) 42%, rgba(8,10,15,.18) 75%, rgba(8,10,15,.24) 100%),
+    linear-gradient(180deg, rgba(6,8,12,.02), rgba(6,8,12,.46));
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app-v4 .v4-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
 @media (max-width: 760px) {
   .session-head-actions {
     width: 100%;
@@ -58,5 +94,24 @@
   .session-head-actions .secondary-btn {
     width: 100%;
     min-width: 0 !important;
+  }
+
+  .app-v4 .v4-hero {
+    padding-top: 154px !important;
+  }
+
+  .app-v4 .v4-hero::before {
+    inset: 0 0 auto 0;
+    width: 100%;
+    height: 184px;
+    background:
+      linear-gradient(180deg, rgba(10,12,18,.02) 0%, rgba(10,12,18,.10) 48%, rgba(10,12,18,.98) 100%),
+      url("/zeus-fitness.webp") center 27% / cover no-repeat;
+    opacity: .98;
+  }
+
+  .app-v4 .v4-hero::after {
+    background:
+      linear-gradient(180deg, rgba(8,10,15,.02) 0%, rgba(8,10,15,.08) 105px, rgba(8,10,15,.88) 165px, rgba(8,10,15,.36) 100%);
   }
 }
