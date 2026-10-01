@@ -617,6 +617,8 @@ select.control { color-scheme: dark; }
   transition: transform .16s var(--ux-ease), color .2s ease, background .2s ease;
 }
 .ux-dock button span { font-size: 9px; font-weight: 800; letter-spacing: .015em; }
+.ux-dock button[aria-current="page"]:not(.ux-dock-main) { color: var(--ux-a); background: color-mix(in srgb, var(--ux-a) 14%, transparent); }
+.ux-dock button[aria-current="page"] span { font-size: 10px; }
 .ux-icon {
   width: 20px;
   height: 20px;

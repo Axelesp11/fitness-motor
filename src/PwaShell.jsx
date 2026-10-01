@@ -35,7 +35,7 @@ function Icon({ name }) {
     home: <><path d="M3 10.8 12 3l9 7.8"/><path d="M5.4 9.7V21h13.2V9.7"/><path d="M9.2 21v-6.6h5.6V21"/></>,
     bolt: <path d="M13.2 2 5.5 13h5.3L9.9 22l8.6-12.2H13z"/>,
     chart: <><path d="M4 19V5"/><path d="M4 19h16"/><path d="m7 15 3-4 3 2 5-7"/></>,
-    gear: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
+    moon: <path d="M20 16.1A8.5 8.5 0 0 1 7.9 4a8.5 8.5 0 1 0 12.2 12.1Z"/>,
     close: <><path d="M6 6l12 12"/><path d="M18 6 6 18"/></>,
   };
   return <svg className="ux-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
@@ -46,8 +46,21 @@ export default function PwaShell({ children }) {
   const [installed, setInstalled] = useState(() => isStandalone());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [prefs, setPrefs] = useState(readUiPrefs);
+  const [currentView, setCurrentView] = useState("hoy");
   const motionLevel = prefs.motion;
   const motionOff = motionLevel === "reduced";
+
+  useEffect(() => {
+    const openAppearance = () => setSettingsOpen(true);
+    window.addEventListener("fitness:open-appearance", openAppearance);
+    return () => window.removeEventListener("fitness:open-appearance", openAppearance);
+  }, []);
+
+  useEffect(() => {
+    const syncView = (event) => setCurrentView(event.detail);
+    window.addEventListener("fitness:view-changed", syncView);
+    return () => window.removeEventListener("fitness:view-changed", syncView);
+  }, []);
 
   const buzz = (pattern) => {
     if (!prefs.haptics || document.visibilityState !== "visible") return;
@@ -123,12 +136,9 @@ export default function PwaShell({ children }) {
     return () => observer.disconnect();
   }, [prefs.haptics]);
 
-  const goTo = (selector) => {
+  const navigate = (view) => {
     buzz(9);
-    document.querySelector(selector)?.scrollIntoView({
-      behavior: motionOff ? "auto" : "smooth",
-      block: "start",
-    });
+    window.dispatchEvent(new CustomEvent("fitness:navigate", { detail: view }));
   };
 
   const install = async () => {
@@ -189,10 +199,10 @@ export default function PwaShell({ children }) {
           animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
           transition={{ ...spring, delay: .08 }}
         >
-          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => goTo(".header")}><Icon name="home"/><span>Inicio</span></motion.button>
-          <motion.button className="ux-dock-main" type="button" whileTap={{ scale: .9 }} onClick={() => goTo(".routine-card")}><Icon name="bolt"/><span>Entreno</span></motion.button>
-          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => goTo(".history")}><Icon name="chart"/><span>Progreso</span></motion.button>
-          <motion.button type="button" whileTap={{ scale: .9 }} onClick={() => { buzz(9); setSettingsOpen(true); }}><Icon name="gear"/><span>Ajustes</span></motion.button>
+          <motion.button type="button" aria-current={currentView === "hoy" ? "page" : undefined} whileTap={{ scale: .9 }} onClick={() => navigate("hoy")}><Icon name="home"/><span>Hoy</span></motion.button>
+          <motion.button className="ux-dock-main" type="button" aria-current={currentView === "entrenar" ? "page" : undefined} whileTap={{ scale: .9 }} onClick={() => navigate("entrenar")}><Icon name="bolt"/><span>Entrenar</span></motion.button>
+          <motion.button type="button" aria-current={currentView === "progreso" ? "page" : undefined} whileTap={{ scale: .9 }} onClick={() => navigate("progreso")}><Icon name="chart"/><span>Progreso</span></motion.button>
+          <motion.button type="button" aria-current={currentView === "habitos" ? "page" : undefined} whileTap={{ scale: .9 }} onClick={() => navigate("habitos")}><Icon name="moon"/><span>Hábitos</span></motion.button>
         </motion.nav>
 
         <AnimatePresence>

@@ -7,6 +7,10 @@ import RuntimeGuard from "./RuntimeGuard.jsx";
 import "./appV42.css";
 import "./appV44.css";
 import "./runtime.css";
+import "./studio.css";
+import "./sections.css";
+import "./achievements.css";
+import "./learning.css";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

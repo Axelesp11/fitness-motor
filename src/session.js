@@ -128,6 +128,25 @@ export function completeWorkout(activeWorkout, progress, now = new Date(), idFac
   };
 }
 
+export function savePartialWorkout(activeWorkout, progress, now = new Date(), idFactory = null) {
+  if (!activeWorkout?.id) throw new Error("No hay una sesión activa.");
+  if (!progress?.completed) throw new Error("Registra una serie antes de guardar una sesión parcial.");
+  const id = idFactory?.() ?? globalThis.crypto?.randomUUID?.() ?? `${now.getTime()}-${Math.random().toString(36).slice(2)}`;
+  const started = safeTime(activeWorkout.startedAt) || now.getTime();
+  return {
+    id,
+    sessionId: activeWorkout.id,
+    sessionLabel: activeWorkout.sessionLabel,
+    startedAt: activeWorkout.startedAt,
+    createdAt: now.toISOString(),
+    durationSec: Math.max(0, Math.round((now.getTime() - started) / 1000)),
+    completedExercises: progress.completed,
+    plannedExercises: progress.planned,
+    completionPct: progress.percent,
+    objective: activeWorkout.planContext?.objective || null,
+  };
+}
+
 export function formatDuration(seconds) {
   const total = Math.max(0, Math.round(Number(seconds) || 0));
   const minutes = Math.floor(total / 60);

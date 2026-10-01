@@ -41,6 +41,12 @@ Es una simplificación inspirada en el principio de retrocalcular gasto a partir
 
 ## Límites deliberados
 
+### Contexto de sueño y energía
+
+La sección de progreso presenta horas de sueño y calorías registradas junto con el rendimiento. Una revisión de ensayos encontró que el déficit energético puede limitar las ganancias de masa libre de grasa durante el entrenamiento de resistencia (PMID 34623696). Un ensayo piloto sobre educación del sueño sugirió beneficios en composición corporal, pero no valida una fórmula individual de crecimiento muscular (PMID 32141273).
+
+Por ello, el producto **no convierte horas de sueño y calorías en kilos de músculo ganado**, ni infiere causalidad de registros diarios. e1RM es una estimación de fuerza; peso corporal incluye agua, grasa y otros tejidos. Para medir hipertrofia harían falta mediciones de composición o tamaño muscular con métodos adecuados y comparables a lo largo del tiempo.
+
 - No se calculan porcentajes de grasa corporal sin medición válida.
 - No se prescriben dietas clínicas.
 - No se automatiza entrenamiento para menores de 18 años.

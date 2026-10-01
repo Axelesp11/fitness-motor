@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultState, parseImportedState, sanitizeState, SCHEMA_VERSION } from "./storage.js";
+import { createDefaultState, loadPreviousState, loadState, parseImportedState, PREVIOUS_STORAGE_KEY, sanitizeState, SCHEMA_VERSION } from "./storage.js";
 
 describe("storage schema", () => {
   it("normaliza estado importado al schema actual", () => {
@@ -8,7 +8,7 @@ describe("storage schema", () => {
       readiness: { energia: 9, sueno: 0, dolor: 3 },
     });
     expect(state.schemaVersion).toBe(SCHEMA_VERSION);
-    expect(SCHEMA_VERSION).toBe(5);
+    expect(SCHEMA_VERSION).toBe(6);
     expect(state.profile.edad).toBe(18);
     expect(state.profile.peso).toBe(250);
     expect(state.profile.dias).toBe(6);
@@ -21,6 +21,23 @@ describe("storage schema", () => {
     });
     expect(state.profile.objetivo).toBe("pr");
     expect(state.profile.prLift).toBe("deadlift");
+  });
+
+  it("mantiene el modo elegido y distingue sesiones parciales de completas", () => {
+    const state = sanitizeState({
+      profile: { trainingHistory: "3to12", experiencia: "basico", learningMode: "advanced", onboardingDone: true, edad: 26, estatura: 175, peso: 80, sexo: "hombre", actividad: "ligero", objetivo: "fuerza", dias: 3, equipo: "gym", duracion: 60 },
+      partialSessions: [{ id: "partial-1", sessionId: "work-1", completedExercises: 1, plannedExercises: 4 }],
+    });
+    expect(state.profile).toMatchObject({ trainingHistory: "3to12", learningMode: "advanced", onboardingDone: true });
+    expect(state.partialSessions).toHaveLength(1);
+    expect(state.sessionCompletions).toHaveLength(0);
+  });
+
+  it("pide completar el perfil antiguo si faltan datos personales, conservando las sesiones", () => {
+    const state = sanitizeState({ sessionCompletions: [{ id: "done-1", sessionLabel: "Día 1" }] });
+    expect(state.profile.onboardingDone).toBe(false);
+    expect(state.profile.trainingHistory).toBe("unknown");
+    expect(state.sessionCompletions).toHaveLength(1);
   });
 
   it("preserva sesión activa, snapshot, contexto, sessionId y sustituciones", () => {
@@ -83,7 +100,27 @@ describe("storage schema", () => {
     const initial = createDefaultState();
     const parsed = parseImportedState(JSON.stringify(initial));
     expect(parsed.profile).toEqual(initial.profile);
-    expect(parsed.schemaVersion).toBe(5);
+    expect(parsed.schemaVersion).toBe(6);
+  });
+
+  it("inicia un perfil sin respuestas ni progreso y conserva el respaldo anterior", () => {
+    const old = { profile: { edad: 26, peso: 80, onboardingDone: true }, sessionCompletions: [{ id: "done-1", sessionLabel: "Día 1" }] };
+    const storage = { getItem: (key) => key === PREVIOUS_STORAGE_KEY ? JSON.stringify(old) : null };
+    const fresh = loadState(storage);
+    expect(fresh.profile).toMatchObject({ edad: null, peso: null, estatura: null, dias: null, objetivo: null, onboardingDone: false });
+    expect(fresh.sessionCompletions).toHaveLength(0);
+    expect(loadPreviousState(storage).sessionCompletions).toHaveLength(1);
+  });
+
+  it("guarda los días concretos en orden de calendario", () => {
+    const profile = sanitizeState({ profile: { weekDays: ["viernes", "lunes", "viernes", "miercoles"], dias: 3 } }).profile;
+    expect(profile.weekDays).toEqual(["lunes", "miercoles", "viernes"]);
+  });
+
+  it("conserva sueño y calorías al importar un registro diario", () => {
+    const state = parseImportedState(JSON.stringify({ bodyLogs: [{ date: "2026-09-26", weight: 98, calories: 2450, sleepHours: 7.5 }] }));
+    expect(state.bodyLogs[0]).toMatchObject({ calories: 2450, sleepHours: 7.5 });
+    expect(sanitizeState({ bodyLogs: [{ date: "2026-09-26", weight: 98, sleepHours: 27 }] }).bodyLogs[0].sleepHours).toBeNull();
   });
 
   it("rejects malformed JSON", () => {
